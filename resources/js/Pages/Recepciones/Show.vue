@@ -10,13 +10,13 @@ import { estadosRecepcion } from '@/lib/etiquetas';
 import { conSigno, fecha, fechaYHora, n } from '@/lib/formato';
 import type { Pedimento, Producto, UbicacionCorta } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Lock, RotateCcw, ScanLine } from 'lucide-vue-next';
-import { computed, reactive, watch } from 'vue';
+import { Lock, PackagePlus, RotateCcw, ScanLine, Trash2 } from 'lucide-vue-next';
+import { computed, reactive, ref, watch } from 'vue';
 
 interface Linea {
     id: number; producto: Producto; cajas: number; piezas_por_caja: number; esperadas: number;
     leidas: number | null; confirmadas: number | null; sin_accesorio: number; diferencia: number | null;
-    ubicacion: UbicacionCorta | null; ubicada: boolean; sugerida: UbicacionCorta | null;
+    ubicacion: UbicacionCorta | null; ubicada: boolean; sugerida: UbicacionCorta | null; no_esperado: boolean;
 }
 
 const props = defineProps<{
@@ -26,6 +26,7 @@ const props = defineProps<{
     };
     ubicaciones: { id: number; codigo: string; zona: string; capacidad: number; ocupadas: number }[];
     zonaRecepcion: string;
+    productos: Producto[];
 }>();
 
 const { esResponsable } = useCompartido();
@@ -35,12 +36,14 @@ const leida = computed(() => props.recepcion.lineas.every((l) => l.confirmadas !
 // Edición por línea (conteo físico)
 const edicion = reactive<Record<number, { confirmadas: number; sin_accesorio: number }>>({});
 const destino = reactive<Record<number, number | null>>({});
+const esperado = reactive<Record<number, { cajas: number; piezas_por_caja: number }>>({});
 watch(
     () => props.recepcion.lineas,
     (lineas) => {
         for (const l of lineas) {
             edicion[l.id] = { confirmadas: l.confirmadas ?? l.esperadas, sin_accesorio: l.sin_accesorio };
             destino[l.id] = l.sugerida?.id ?? null;
+            esperado[l.id] = { cajas: l.cajas, piezas_por_caja: l.piezas_por_caja };
         }
     },
     { immediate: true },
@@ -61,6 +64,42 @@ const resultado = computed(() => {
     if (totales.value.sinAccesorio) return { estado: 'parcial' as const, titulo: 'Cuadra en piezas, con pendientes de accesorio' };
     return { estado: 'cuadra' as const, titulo: 'Lo recibido cuadra con lo esperado' };
 });
+
+// Corrección de lo esperado (antes de leer) y SKU no esperados (durante el conteo)
+const editarEsperado = computed(() => props.recepcion.estado === 'esperada' && esResponsable.value);
+const enConteo = computed(() => props.recepcion.estado === 'en_conteo');
+const cambioEsperado = (l: Linea) => esperado[l.id].cajas !== l.cajas || esperado[l.id].piezas_por_caja !== l.piezas_por_caja;
+function guardarEsperado(l: Linea) {
+    router.put(`/recepcion-lineas/${l.id}/esperado`, esperado[l.id], opciones);
+}
+function quitar(l: Linea) {
+    if (window.confirm(`¿Quitar ${l.producto.sku} de la recepción?`)) router.delete(`/recepcion-lineas/${l.id}`, opciones);
+}
+const nuevo = reactive({ sku: '', cajas: null as number | null, piezas_por_caja: null as number | null, piezas: null as number | null });
+const errores = ref<Record<string, string>>({});
+const productoNuevo = computed(() => props.productos.find((p) => p.sku === nuevo.sku.trim().toUpperCase()) ?? null);
+const yaEsta = computed(() => !!productoNuevo.value && props.recepcion.lineas.some((l) => l.producto.id === productoNuevo.value!.id));
+function elegirNuevo() {
+    nuevo.sku = nuevo.sku.trim().toUpperCase();
+    if (productoNuevo.value && !nuevo.piezas_por_caja) nuevo.piezas_por_caja = productoNuevo.value.piezas_por_caja;
+}
+const puedeAgregar = computed(
+    () => !!productoNuevo.value && !yaEsta.value && (enConteo.value ? (nuevo.piezas ?? 0) > 0 : (nuevo.cajas ?? 0) > 0 && (nuevo.piezas_por_caja ?? 0) > 0),
+);
+function agregar() {
+    if (!productoNuevo.value) return;
+    const datos = enConteo.value
+        ? { producto_id: productoNuevo.value.id, piezas: nuevo.piezas }
+        : { producto_id: productoNuevo.value.id, cajas: nuevo.cajas, piezas_por_caja: nuevo.piezas_por_caja };
+    router.post(`/recepciones/${props.recepcion.id}/lineas`, datos, {
+        ...opciones,
+        onError: (e) => (errores.value = e),
+        onSuccess: () => {
+            errores.value = {};
+            Object.assign(nuevo, { sku: '', cajas: null, piezas_por_caja: null, piezas: null });
+        },
+    });
+}
 
 const porUbicar = computed(() => props.recepcion.lineas.filter((l) => !l.ubicada).length);
 const libre = (u: { capacidad: number; ocupadas: number }) => u.capacidad - u.ocupadas;
@@ -112,7 +151,10 @@ function ubicar(l: Linea) {
                 diferencia <b class="num">{{ conSigno(totales.diferencia) }}</b>
                 <template v-if="totales.sinAccesorio"> · <b class="num">{{ totales.sinAccesorio }}</b> sin accesorio</template>
             </template>
-            <template v-else>Pasa el lector por la mercancía recibida para comparar contra el archivo del propietario.</template>
+            <template v-else>
+                Pasa el lector por la mercancía recibida para comparar contra el archivo del propietario.
+                <template v-if="editarEsperado"> Antes de leer todavía puedes corregir lo esperado.</template>
+            </template>
         </Resultado>
 
         <p v-if="cerrada" class="mb-4 text-sm text-ink-2">
@@ -139,9 +181,18 @@ function ubicar(l: Linea) {
                     <tr v-for="l in recepcion.lineas" :key="l.id" :class="{ 'bg-bad-bg/50': l.diferencia }">
                         <td>
                             <IdSegmentado :valor="l.producto.sku" tipo="sku" />
+                            <span v-if="l.no_esperado" class="ml-2 rounded bg-warn-bg px-1.5 py-0.5 text-xs font-semibold text-warn">No esperado</span>
                             <p class="text-xs text-ink-2">{{ l.producto.descripcion }}<template v-if="l.producto.referencia"> · ref. {{ l.producto.referencia }}</template></p>
                         </td>
-                        <td class="der text-ink-2">{{ l.cajas }} × {{ l.piezas_por_caja }}</td>
+                        <td class="der text-ink-2">
+                            <div v-if="editarEsperado" class="flex items-center justify-end gap-1.5">
+                                <input v-model.number="esperado[l.id].cajas" type="number" min="1" class="campo num w-20 text-right" :aria-label="`Cajas esperadas ${l.producto.sku}`" />
+                                <span aria-hidden="true">×</span>
+                                <input v-model.number="esperado[l.id].piezas_por_caja" type="number" min="1" class="campo num w-20 text-right" :aria-label="`Piezas por caja ${l.producto.sku}`" />
+                            </div>
+                            <template v-else-if="l.no_esperado">—</template>
+                            <template v-else>{{ l.cajas }} × {{ l.piezas_por_caja }}</template>
+                        </td>
                         <td class="der">{{ n(l.esperadas) }}</td>
                         <td class="der">{{ n(l.leidas) }}</td>
                         <td class="der">
@@ -158,8 +209,21 @@ function ubicar(l: Linea) {
                         </td>
                         <td class="der font-semibold" :class="l.diferencia === null ? 'text-ink-3' : l.diferencia === 0 ? 'text-ok' : 'text-bad'">{{ conSigno(l.diferencia) }}</td>
                         <td>
-                            <button v-if="!cerrada && leida && cambiada(l)" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" @click="guardar(l)">Guardar</button>
-                            <template v-else-if="cerrada">
+                            <div v-if="!cerrada" class="flex items-center gap-1">
+                                <button v-if="editarEsperado && cambioEsperado(l)" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" @click="guardarEsperado(l)">Guardar</button>
+                                <button v-else-if="leida && cambiada(l)" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" @click="guardar(l)">Guardar</button>
+                                <button
+                                    v-if="esResponsable && (editarEsperado || (enConteo && l.no_esperado))"
+                                    type="button"
+                                    class="rounded-ui p-2 text-ink-3 hover:bg-surface-2 hover:text-bad"
+                                    :aria-label="`Quitar ${l.producto.sku}`"
+                                    title="Quitar de la recepción"
+                                    @click="quitar(l)"
+                                >
+                                    <Trash2 class="size-4" />
+                                </button>
+                            </div>
+                            <template v-else>
                                 <IdSegmentado v-if="l.ubicada && l.ubicacion" :valor="l.ubicacion.codigo" tipo="ubicacion" />
                                 <span v-else-if="l.ubicada" class="text-ink-3">Todo a incidencias</span>
                                 <div v-else class="flex items-center gap-2">
@@ -175,6 +239,38 @@ function ubicar(l: Linea) {
                     </tr>
                 </tbody>
             </table>
+
+            <!-- Agregar SKU: a lo esperado (antes de leer) o como no esperado (durante el conteo) -->
+            <form v-if="editarEsperado || enConteo" class="flex flex-wrap items-end gap-3 border-t border-line bg-surface-2 px-5 py-4" @submit.prevent="agregar">
+                <div class="min-w-56 flex-1">
+                    <label for="nuevo-sku" class="etiqueta">{{ enConteo ? 'Llegó un SKU que no venía en el archivo' : 'Agregar SKU a lo esperado' }}</label>
+                    <input id="nuevo-sku" v-model="nuevo.sku" list="skus-recepcion" class="campo font-id uppercase placeholder:normal-case" placeholder="Busca por SKU" autocomplete="off" @change="elegirNuevo" @blur="elegirNuevo" />
+                    <datalist id="skus-recepcion">
+                        <option v-for="p in productos" :key="p.id" :value="p.sku">{{ p.descripcion }}</option>
+                    </datalist>
+                    <p v-if="nuevo.sku && !productoNuevo" class="mt-1 text-sm text-bad">No está en el catálogo. <Link href="/productos" class="underline">Dar de alta en Productos</Link></p>
+                    <p v-else-if="yaEsta" class="mt-1 text-sm text-bad">Ese SKU ya está en la recepción.</p>
+                    <p v-else-if="errores.producto_id" class="mt-1 text-sm text-bad">{{ errores.producto_id }}</p>
+                </div>
+                <template v-if="enConteo">
+                    <div>
+                        <label for="nuevo-piezas" class="etiqueta">Piezas contadas</label>
+                        <input id="nuevo-piezas" v-model.number="nuevo.piezas" type="number" min="1" class="campo num w-32 text-right" />
+                    </div>
+                </template>
+                <template v-else>
+                    <div>
+                        <label for="nuevo-cajas" class="etiqueta">Cajas</label>
+                        <input id="nuevo-cajas" v-model.number="nuevo.cajas" type="number" min="1" class="campo num w-24 text-right" />
+                    </div>
+                    <div>
+                        <label for="nuevo-ppc" class="etiqueta">Piezas por caja</label>
+                        <input id="nuevo-ppc" v-model.number="nuevo.piezas_por_caja" type="number" min="1" class="campo num w-24 text-right" />
+                    </div>
+                </template>
+                <button type="submit" class="btn btn-secundario" :disabled="!puedeAgregar"><PackagePlus class="size-4" />{{ enConteo ? 'Registrar no esperado' : 'Agregar' }}</button>
+                <p v-if="enConteo" class="w-full text-xs text-ink-3">Queda con esperado 0: al cerrar la recepción se registra como sobrante.</p>
+            </form>
         </section>
 
         <div class="mt-5 grid gap-3 lg:grid-cols-2">

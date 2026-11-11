@@ -34,6 +34,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/recepciones/{recepcion}/releer', [RecepcionController::class, 'releer']);
     Route::post('/recepciones/{recepcion}/cerrar', [RecepcionController::class, 'cerrar'])->middleware('rol:responsable');
     Route::put('/recepcion-lineas/{linea}', [RecepcionController::class, 'actualizarLinea']);
+    Route::post('/recepciones/{recepcion}/lineas', [RecepcionController::class, 'agregarLinea']);
+    Route::put('/recepcion-lineas/{linea}/esperado', [RecepcionController::class, 'actualizarEsperado'])->middleware('rol:responsable');
+    Route::delete('/recepcion-lineas/{linea}', [RecepcionController::class, 'quitarLinea'])->middleware('rol:responsable');
     Route::post('/recepcion-lineas/{linea}/ubicar', [RecepcionController::class, 'ubicar']);
 
     // Inventario e historial

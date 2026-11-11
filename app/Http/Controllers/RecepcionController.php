@@ -16,6 +16,7 @@ use App\Services\Rfid\LectorSimulado;
 use App\Support\Contenedor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -72,6 +73,7 @@ class RecepcionController extends Controller
                     'ubicacion' => Presentar::ubicacion($l->ubicacion),
                     'ubicada' => $l->ubicada_at !== null,
                     'sugerida' => $recepcion->estado === 'cerrada' && ! $l->ubicada_at ? Presentar::ubicacion($this->sugerirUbicacion($l)) : null,
+                    'no_esperado' => $l->piezas_esperadas === 0,
                 ]),
             ],
             'ubicaciones' => Ubicacion::whereIn('zona', ['rack', 'adicional'])->where('activa', true)->orderBy('codigo')->get()
@@ -80,6 +82,7 @@ class RecepcionController extends Controller
                     'ocupadas' => (int) Existencia::where('ubicacion_id', $u->id)->sum('cantidad'),
                 ]),
             'zonaRecepcion' => $rec->codigo,
+            'productos' => $recepcion->estado === 'cerrada' ? [] : Producto::orderBy('sku')->get()->map(fn ($p) => Presentar::producto($p)),
         ]);
     }
 
@@ -89,13 +92,24 @@ class RecepcionController extends Controller
         abort_if($recepcion->estado === 'cerrada', 422);
         $recepcion->load('lineas');
 
-        $esperado = $recepcion->lineas->mapWithKeys(fn ($l) => [$l->producto_id => $l->piezas_esperadas])->all();
+        // Lo que físicamente está: lo esperado, y en renglones no esperados lo que ya se registró.
+        $esperado = $recepcion->lineas->mapWithKeys(fn ($l) => [
+            $l->producto_id => $l->piezas_esperadas > 0 ? $l->piezas_esperadas : (int) $l->piezas_confirmadas,
+        ])->all();
         $epcs = $lector->leer($esperado, $recepcion->folio);
         $conteo = Epc::contarPorProducto($epcs);
 
         foreach ($recepcion->lineas as $linea) {
             $leidas = $conteo[$linea->producto_id] ?? 0;
             $linea->update(['piezas_leidas' => $leidas, 'piezas_confirmadas' => $leidas]);
+        }
+        // El lector vio un SKU que no venía en el archivo: se agrega como no esperado.
+        foreach (array_diff_key($conteo, $esperado) as $productoId => $leidas) {
+            $recepcion->lineas()->create([
+                'producto_id' => $productoId, 'cajas_esperadas' => 0, 'piezas_esperadas' => 0,
+                'piezas_por_caja' => Producto::find($productoId)->piezas_por_caja,
+                'piezas_leidas' => $leidas, 'piezas_confirmadas' => $leidas,
+            ]);
         }
         $recepcion->update(['estado' => 'en_conteo']);
 
@@ -115,6 +129,75 @@ class RecepcionController extends Controller
         $linea->recepcion->update(['estado' => 'en_conteo']);
 
         return back()->with('ok', 'Conteo de '.$linea->producto->sku.' actualizado.');
+    }
+
+    /**
+     * Agrega un SKU a la recepción.
+     * Esperada: la responsable corrige lo que se espera (cajas × piezas por caja).
+     * En conteo: llegó un SKU que no venía en el archivo; se registra con lo contado (esperado 0).
+     */
+    public function agregarLinea(Request $request, Recepcion $recepcion)
+    {
+        abort_if($recepcion->estado === 'cerrada', 422);
+        $esperada = $recepcion->estado === 'esperada';
+        if ($esperada && ! $request->user()->esResponsable()) {
+            return back()->with('error', 'Lo esperado lo corrige la responsable operativa.');
+        }
+
+        $datos = $request->validate([
+            'producto_id' => ['required', 'integer', 'exists:productos,id', Rule::unique('recepcion_lineas', 'producto_id')->where('recepcion_id', $recepcion->id)],
+            ...($esperada
+                ? ['cajas' => ['required', 'integer', 'min:1', 'max:10000'], 'piezas_por_caja' => ['required', 'integer', 'min:1', 'max:10000']]
+                : ['piezas' => ['required', 'integer', 'min:1', 'max:100000']]),
+        ], [
+            'producto_id.required' => 'Elige un SKU del catálogo.',
+            'producto_id.exists' => 'Ese SKU no está en el catálogo.',
+            'producto_id.unique' => 'Ese SKU ya está en la recepción.',
+            'cajas.*' => 'Indica las cajas (1 o más).',
+            'piezas_por_caja.*' => 'Indica las piezas por caja (1 o más).',
+            'piezas.*' => 'Indica cuántas piezas llegaron (1 o más).',
+        ]);
+
+        $producto = Producto::findOrFail($datos['producto_id']);
+        $recepcion->lineas()->create($esperada
+            ? ['producto_id' => $producto->id, 'cajas_esperadas' => $datos['cajas'], 'piezas_por_caja' => $datos['piezas_por_caja'],
+                'piezas_esperadas' => $datos['cajas'] * $datos['piezas_por_caja']]
+            : ['producto_id' => $producto->id, 'cajas_esperadas' => 0, 'piezas_por_caja' => $producto->piezas_por_caja,
+                'piezas_esperadas' => 0, 'piezas_confirmadas' => $datos['piezas']]);
+
+        return back()->with('ok', $esperada
+            ? $producto->sku.' agregado a lo esperado.'
+            : $producto->sku.' registrado como no esperado: al cerrar quedará como sobrante.');
+    }
+
+    /** Corrige cajas y piezas por caja mientras la recepción no tenga lectura. */
+    public function actualizarEsperado(Request $request, RecepcionLinea $linea)
+    {
+        abort_if($linea->recepcion->estado !== 'esperada', 422);
+        $datos = $request->validate([
+            'cajas' => ['required', 'integer', 'min:1', 'max:10000'],
+            'piezas_por_caja' => ['required', 'integer', 'min:1', 'max:10000'],
+        ], ['cajas.*' => 'Indica las cajas (1 o más).', 'piezas_por_caja.*' => 'Indica las piezas por caja (1 o más).']);
+
+        $linea->update(['cajas_esperadas' => $datos['cajas'], 'piezas_por_caja' => $datos['piezas_por_caja'],
+            'piezas_esperadas' => $datos['cajas'] * $datos['piezas_por_caja']]);
+
+        return back()->with('ok', 'Esperado de '.$linea->producto->sku.' corregido.');
+    }
+
+    /** Quita un SKU: de lo esperado (antes de leer) o un no esperado registrado por error. */
+    public function quitarLinea(Request $request, RecepcionLinea $linea)
+    {
+        $recepcion = $linea->recepcion;
+        $permitido = $recepcion->estado === 'esperada' || ($recepcion->estado === 'en_conteo' && $linea->piezas_esperadas === 0);
+        abort_unless($permitido, 422);
+        if ($recepcion->lineas()->count() === 1) {
+            return back()->with('error', 'La recepción debe tener al menos un SKU.');
+        }
+        $sku = $linea->producto->sku;
+        $linea->delete();
+
+        return back()->with('ok', $sku.' quitado de la recepción.');
     }
 
     public function releer(Recepcion $recepcion)
@@ -153,8 +236,10 @@ class RecepcionController extends Controller
                 }
                 $dif = $l->diferencia();
                 if ($dif !== 0) {
-                    $this->incidencia($recepcion, $l, $dif < 0 ? 'faltante' : 'sobrante', abs($dif),
-                        ($dif < 0 ? 'Faltan ' : 'Sobran ').abs($dif).' piezas contra el archivo del propietario.', $request->user()->id);
+                    $descripcion = $l->piezas_esperadas === 0
+                        ? 'Llegaron '.$dif.' piezas de un SKU que no venía en el archivo del propietario.'
+                        : ($dif < 0 ? 'Faltan ' : 'Sobran ').abs($dif).' piezas contra el archivo del propietario.';
+                    $this->incidencia($recepcion, $l, $dif < 0 ? 'faltante' : 'sobrante', abs($dif), $descripcion, $request->user()->id);
                 }
             }
             $recepcion->update(['estado' => 'cerrada', 'cerro_id' => $request->user()->id, 'cerrada_at' => now()]);
