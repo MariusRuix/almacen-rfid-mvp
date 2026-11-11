@@ -1,0 +1,19 @@
+import '../css/app.css';
+
+import { createInertiaApp } from '@inertiajs/vue3';
+import type { DefineComponent } from 'vue';
+import { createApp, h } from 'vue';
+
+const appName = import.meta.env.VITE_APP_NAME || 'Almacén RFID';
+
+createInertiaApp({
+    title: (title) => (title ? `${title} · ${appName}` : appName),
+    resolve: (name) => {
+        const pages = import.meta.glob<DefineComponent>('./Pages/**/*.vue', { eager: true });
+        return pages[`./Pages/${name}.vue`];
+    },
+    setup({ el, App, props, plugin }) {
+        createApp({ render: () => h(App, props) }).use(plugin).mount(el);
+    },
+    progress: { color: '#d0561c', delay: 150 },
+});

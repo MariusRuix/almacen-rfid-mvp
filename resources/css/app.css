@@ -1,0 +1,290 @@
+@import '@fontsource/barlow/400.css';
+@import '@fontsource/barlow/500.css';
+@import '@fontsource/barlow/600.css';
+@import '@fontsource/barlow-semi-condensed/500.css';
+@import '@fontsource/barlow-semi-condensed/600.css';
+@import '@fontsource/barlow-semi-condensed/700.css';
+@import '@fontsource-variable/public-sans';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'tailwindcss';
+
+@source '../js';
+
+/*
+ * Dos temas sobre la misma estructura:
+ *  - contenedor: rail azul acero, identificadores marcados como número de contenedor.
+ *  - semaforo:   rail grafito, validaciones como luz de semáforo fiscal.
+ */
+:root,
+[data-tema='contenedor'] {
+    --rail: #15304a;
+    --rail-2: #1d4062;
+    --rail-ink: #e3ecf4;
+    --rail-muted: #93abc2;
+    --rail-line: #2a5078;
+
+    --ground: #e9edf1;
+    --surface: #ffffff;
+    --surface-2: #f4f6f9;
+    --ink: #142130;
+    --ink-2: #485b6e;
+    --ink-3: #6b7d8f;
+    --line: #d3dbe3;
+    --line-strong: #b5c2cf;
+
+    --primary: #1c4f7e;
+    --primary-hover: #163f66;
+    --primary-ink: #ffffff;
+    --marca: #d0561c; /* naranja de marcaje: dígito verificador y foco */
+
+    --ok: #18794e;
+    --ok-bg: #e3f4ea;
+    --warn: #9a5b00;
+    --warn-bg: #fdf1d8;
+    --bad: #b4232b;
+    --bad-bg: #fbe5e6;
+    --info: #1c4f7e;
+    --info-bg: #e3edf7;
+
+    --font-ui: 'Barlow', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Barlow Semi Condensed', 'Barlow', ui-sans-serif, sans-serif;
+    --font-id: 'JetBrains Mono Variable', ui-monospace, monospace;
+    --radius: 4px;
+}
+
+[data-tema='semaforo'] {
+    --rail: #1b1c1e;
+    --rail-2: #2a2b2e;
+    --rail-ink: #f1f0ec;
+    --rail-muted: #a3a29c;
+    --rail-line: #3a3b3f;
+
+    --ground: #ecebe6;
+    --surface: #ffffff;
+    --surface-2: #f6f5f2;
+    --ink: #1b1c1e;
+    --ink-2: #4f4f4c;
+    --ink-3: #74736e;
+    --line: #dad8d1;
+    --line-strong: #bdbab1;
+
+    --primary: #1b1c1e;
+    --primary-hover: #000000;
+    --primary-ink: #ffffff;
+    --marca: #1b1c1e;
+
+    --ok: #0f7a3a;
+    --ok-bg: #ddf3e4;
+    --warn: #8f5a00;
+    --warn-bg: #fbefcf;
+    --bad: #c0261c;
+    --bad-bg: #fbe3e0;
+    --info: #3d4a5c;
+    --info-bg: #e8ebef;
+
+    --luz-verde: #19c25c;
+    --luz-ambar: #ffb300;
+    --luz-roja: #f0352a;
+
+    --font-ui: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    --radius: 6px;
+}
+
+@theme inline {
+    --color-rail: var(--rail);
+    --color-rail-2: var(--rail-2);
+    --color-rail-ink: var(--rail-ink);
+    --color-rail-muted: var(--rail-muted);
+    --color-rail-line: var(--rail-line);
+    --color-ground: var(--ground);
+    --color-surface: var(--surface);
+    --color-surface-2: var(--surface-2);
+    --color-ink: var(--ink);
+    --color-ink-2: var(--ink-2);
+    --color-ink-3: var(--ink-3);
+    --color-line: var(--line);
+    --color-line-strong: var(--line-strong);
+    --color-primary: var(--primary);
+    --color-primary-hover: var(--primary-hover);
+    --color-primary-ink: var(--primary-ink);
+    --color-marca: var(--marca);
+    --color-ok: var(--ok);
+    --color-ok-bg: var(--ok-bg);
+    --color-warn: var(--warn);
+    --color-warn-bg: var(--warn-bg);
+    --color-bad: var(--bad);
+    --color-bad-bg: var(--bad-bg);
+    --color-info: var(--info);
+    --color-info-bg: var(--info-bg);
+    --font-ui: var(--font-ui);
+    --font-display: var(--font-display);
+    --font-id: var(--font-id);
+    --radius-ui: var(--radius);
+}
+
+@layer base {
+    html {
+        background: var(--ground);
+        color: var(--ink);
+        font-family: var(--font-ui);
+        font-size: 15px;
+        -webkit-font-smoothing: antialiased;
+        color-scheme: light;
+    }
+    body {
+        min-height: 100dvh;
+        background: var(--ground);
+    }
+    h1,
+    h2,
+    h3 {
+        font-family: var(--font-display);
+        text-wrap: balance;
+        letter-spacing: -0.01em;
+    }
+    ::selection {
+        background: color-mix(in srgb, var(--primary) 22%, transparent);
+        color: var(--ink);
+    }
+    :focus-visible {
+        outline: 2px solid var(--marca);
+        outline-offset: 2px;
+    }
+    [data-tema='semaforo'] :focus-visible {
+        outline-color: var(--luz-ambar);
+    }
+    input,
+    select,
+    textarea {
+        caret-color: var(--primary);
+    }
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--line-strong) transparent;
+    }
+    .num {
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+@layer components {
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        min-height: 2.5rem;
+        padding: 0 1rem;
+        border-radius: var(--radius);
+        font-weight: 600;
+        font-size: 0.95rem;
+        border: 1px solid transparent;
+        transition:
+            background-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+            border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+            transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .btn:active:not(:disabled) {
+        transform: translateY(1px);
+    }
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .btn-primario {
+        background: var(--primary);
+        color: var(--primary-ink);
+    }
+    .btn-primario:hover:not(:disabled) {
+        background: var(--primary-hover);
+    }
+    .btn-secundario {
+        background: var(--surface);
+        color: var(--ink);
+        border-color: var(--line-strong);
+    }
+    .btn-secundario:hover:not(:disabled) {
+        background: var(--surface-2);
+        border-color: var(--ink-3);
+    }
+    .btn-peligro {
+        background: var(--bad);
+        color: #fff;
+    }
+    .btn-ok {
+        background: var(--ok);
+        color: #fff;
+    }
+    .btn-grande {
+        min-height: 3.75rem;
+        padding: 0 1.5rem;
+        font-size: 1.15rem;
+    }
+
+    .campo {
+        width: 100%;
+        min-height: 2.5rem;
+        padding: 0 0.75rem;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+    }
+    .campo:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+    }
+    .campo::placeholder {
+        color: var(--ink-3);
+    }
+    .etiqueta {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--ink-2);
+        margin-bottom: 0.3rem;
+    }
+
+    .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: 0 1px 2px rgb(20 33 48 / 0.05);
+    }
+
+    .tabla {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 0.93rem;
+    }
+    .tabla th {
+        position: sticky;
+        top: 0;
+        background: var(--surface-2);
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.78rem;
+        color: var(--ink-2);
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+    }
+    .tabla td {
+        padding: 0.65rem 0.75rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: middle;
+    }
+    .tabla tbody tr:hover td {
+        background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    }
+    .tabla .der {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+}
