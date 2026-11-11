@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DemoController;
+use App\Http\Controllers\DestinoController;
 use App\Http\Controllers\IncidenciaController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\MovimientoController;
@@ -49,6 +50,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/pedido-destinos/{destino}/leer', [PedidoController::class, 'leerDestino']);
     Route::post('/pedido-destinos/{destino}/corregir', [PedidoController::class, 'corregirDestino']);
     Route::post('/pedido-destinos/{destino}/aceptar', [PedidoController::class, 'aceptarLectura'])->middleware('rol:responsable');
+
+    // Catálogo de destinos
+    Route::get('/destinos', [DestinoController::class, 'index']);
+    Route::post('/destinos', [DestinoController::class, 'store'])->middleware('rol:responsable');
+    Route::put('/destinos/{destino}', [DestinoController::class, 'update'])->middleware('rol:responsable');
+    Route::delete('/destinos/{destino}', [DestinoController::class, 'destroy'])->middleware('rol:responsable');
 
     // Incidencias
     Route::get('/incidencias', [IncidenciaController::class, 'index']);

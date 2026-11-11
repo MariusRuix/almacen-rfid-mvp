@@ -11,6 +11,7 @@ import {
     LayoutGrid,
     LogOut,
     Map,
+    MapPin,
     Menu,
     RotateCcw,
     ScanLine,
@@ -49,6 +50,10 @@ const secciones = computed<{ nombre: string; items: ItemNav[] }[]>(() => [
             { href: '/incidencias', etiqueta: 'Incidencias', icono: TriangleAlert, contador: page.props.incidenciasAbiertas },
             { href: '/movimientos', etiqueta: 'Historial', icono: History },
         ],
+    },
+    {
+        nombre: 'Catálogos',
+        items: [{ href: '/destinos', etiqueta: 'Destinos', icono: MapPin }],
     },
     {
         nombre: 'Piso',
