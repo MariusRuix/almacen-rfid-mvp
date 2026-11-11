@@ -1,0 +1,285 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Existencia;
+use App\Models\Incidencia;
+use App\Models\Pedimento;
+use App\Models\Producto;
+use App\Models\Recepcion;
+use App\Models\RecepcionLinea;
+use App\Models\Ubicacion;
+use App\Services\Inventario;
+use App\Services\Rfid\Epc;
+use App\Services\Rfid\LectorRfid;
+use App\Services\Rfid\LectorSimulado;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Inertia\Response;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+
+class RecepcionController extends Controller
+{
+    public function index(): Response
+    {
+        return Inertia::render('Recepciones/Index', [
+            'recepciones' => Recepcion::with('pedimento')
+                ->withSum('lineas', 'piezas_esperadas')->withSum('lineas', 'piezas_confirmadas')
+                ->withCount(['lineas as por_ubicar' => fn ($q) => $q->whereNull('ubicada_at')])
+                ->latest('id')->get()->map(fn ($r) => [
+                    'id' => $r->id,
+                    'folio' => $r->folio,
+                    'estado' => $r->estado,
+                    'origen' => $r->origen,
+                    'fecha_esperada' => $r->fecha_esperada->toDateString(),
+                    'pedimento' => Presentar::pedimento($r->pedimento),
+                    'esperadas' => (int) $r->lineas_sum_piezas_esperadas,
+                    'confirmadas' => $r->lineas_sum_piezas_confirmadas === null ? null : (int) $r->lineas_sum_piezas_confirmadas,
+                    'por_ubicar' => $r->por_ubicar,
+                ]),
+        ]);
+    }
+
+    public function show(Recepcion $recepcion): Response
+    {
+        $recepcion->load(['pedimento', 'lineas.producto', 'lineas.ubicacion', 'cerro']);
+        $rec = Ubicacion::zona('recepcion');
+
+        return Inertia::render('Recepciones/Show', [
+            'recepcion' => [
+                'id' => $recepcion->id,
+                'folio' => $recepcion->folio,
+                'estado' => $recepcion->estado,
+                'origen' => $recepcion->origen,
+                'fecha_esperada' => $recepcion->fecha_esperada->toDateString(),
+                'cerrada_at' => $recepcion->cerrada_at?->toDateTimeString(),
+                'cerro' => $recepcion->cerro?->name,
+                'pedimento' => Presentar::pedimento($recepcion->pedimento),
+                'lineas' => $recepcion->lineas->map(fn (RecepcionLinea $l) => [
+                    'id' => $l->id,
+                    'producto' => Presentar::producto($l->producto),
+                    'cajas' => $l->cajas_esperadas,
+                    'piezas_por_caja' => $l->piezas_por_caja,
+                    'esperadas' => $l->piezas_esperadas,
+                    'leidas' => $l->piezas_leidas,
+                    'confirmadas' => $l->piezas_confirmadas,
+                    'sin_accesorio' => $l->piezas_sin_accesorio,
+                    'diferencia' => $l->diferencia(),
+                    'ubicacion' => Presentar::ubicacion($l->ubicacion),
+                    'ubicada' => $l->ubicada_at !== null,
+                    'sugerida' => $recepcion->estado === 'cerrada' && ! $l->ubicada_at ? Presentar::ubicacion($this->sugerirUbicacion($l)) : null,
+                ]),
+            ],
+            'ubicaciones' => Ubicacion::whereIn('zona', ['rack', 'adicional'])->where('activa', true)->orderBy('codigo')->get()
+                ->map(fn ($u) => [
+                    'id' => $u->id, 'codigo' => $u->codigo, 'zona' => $u->zona, 'capacidad' => $u->capacidad,
+                    'ocupadas' => (int) Existencia::where('ubicacion_id', $u->id)->sum('cantidad'),
+                ]),
+            'zonaRecepcion' => $rec->codigo,
+        ]);
+    }
+
+    /** Barrido RFID de lo recibido (portal o handheld). */
+    public function leerRfid(Recepcion $recepcion, LectorRfid $lector)
+    {
+        abort_if($recepcion->estado === 'cerrada', 422);
+        $recepcion->load('lineas');
+
+        $esperado = $recepcion->lineas->mapWithKeys(fn ($l) => [$l->producto_id => $l->piezas_esperadas])->all();
+        $epcs = $lector->leer($esperado, $recepcion->folio);
+        $conteo = Epc::contarPorProducto($epcs);
+
+        foreach ($recepcion->lineas as $linea) {
+            $leidas = $conteo[$linea->producto_id] ?? 0;
+            $linea->update(['piezas_leidas' => $leidas, 'piezas_confirmadas' => $leidas]);
+        }
+        $recepcion->update(['estado' => 'en_conteo']);
+
+        return back()->with('ok', count($epcs).' etiquetas leídas.');
+    }
+
+    /** Ajuste manual del operador (conteo físico, piezas sin accesorio). */
+    public function actualizarLinea(Request $request, RecepcionLinea $linea)
+    {
+        abort_if($linea->recepcion->estado === 'cerrada', 422);
+        $datos = $request->validate([
+            'confirmadas' => ['required', 'integer', 'min:0', 'max:100000'],
+            'sin_accesorio' => ['required', 'integer', 'min:0', 'lte:confirmadas'],
+        ], ['sin_accesorio.lte' => 'Las piezas sin accesorio no pueden ser más que las confirmadas.']);
+
+        $linea->update(['piezas_confirmadas' => $datos['confirmadas'], 'piezas_sin_accesorio' => $datos['sin_accesorio']]);
+        $linea->recepcion->update(['estado' => 'en_conteo']);
+
+        return back()->with('ok', 'Conteo de '.$linea->producto->sku.' actualizado.');
+    }
+
+    public function releer(Recepcion $recepcion)
+    {
+        LectorSimulado::marcarCorregido($recepcion->folio);
+
+        return back()->with('ok', 'Listo para volver a leer.');
+    }
+
+    /** Cierra la recepción: entra al inventario y las diferencias quedan como incidencias. */
+    public function cerrar(Request $request, Recepcion $recepcion, Inventario $inventario)
+    {
+        abort_if($recepcion->estado === 'cerrada', 422);
+        $recepcion->load('lineas.producto');
+
+        if ($recepcion->lineas->contains(fn ($l) => $l->piezas_confirmadas === null)) {
+            return back()->with('error', 'Falta confirmar el conteo de algunas líneas.');
+        }
+
+        $zonaRec = Ubicacion::zona('recepcion');
+        $zonaInc = Ubicacion::zona('incidencia');
+
+        DB::transaction(function () use ($recepcion, $inventario, $zonaRec, $zonaInc, $request) {
+            foreach ($recepcion->lineas as $l) {
+                $buenas = $l->piezas_confirmadas - $l->piezas_sin_accesorio;
+                if ($buenas > 0) {
+                    $inventario->mover('recepcion', $l->producto_id, $recepcion->pedimento_id, null,
+                        ['ubicacion_id' => $zonaRec->id, 'estado' => 'disponible'], $buenas, $recepcion, $recepcion->folio);
+                }
+                if ($l->piezas_sin_accesorio > 0) {
+                    $inventario->mover('recepcion', $l->producto_id, $recepcion->pedimento_id, null,
+                        ['ubicacion_id' => $zonaInc->id, 'estado' => 'incidencia'], $l->piezas_sin_accesorio, $recepcion, $recepcion->folio,
+                        'Llegó sin '.($l->producto->accesorio ?? 'accesorio'));
+                    $this->incidencia($recepcion, $l, 'accesorio_faltante', $l->piezas_sin_accesorio,
+                        'Llegaron '.$l->piezas_sin_accesorio.' piezas sin '.($l->producto->accesorio ?? 'accesorio').'.', $request->user()->id);
+                }
+                $dif = $l->diferencia();
+                if ($dif !== 0) {
+                    $this->incidencia($recepcion, $l, $dif < 0 ? 'faltante' : 'sobrante', abs($dif),
+                        ($dif < 0 ? 'Faltan ' : 'Sobran ').abs($dif).' piezas contra el archivo del propietario.', $request->user()->id);
+                }
+            }
+            $recepcion->update(['estado' => 'cerrada', 'cerro_id' => $request->user()->id, 'cerrada_at' => now()]);
+        });
+
+        return back()->with('ok', 'Recepción cerrada. La mercancía está en '.$zonaRec->codigo.' lista para ubicarse.');
+    }
+
+    /** Guarda lo recibido de una línea en un rack o ubicación adicional. */
+    public function ubicar(Request $request, RecepcionLinea $linea, Inventario $inventario)
+    {
+        $recepcion = $linea->recepcion;
+        abort_if($recepcion->estado !== 'cerrada' || $linea->ubicada_at, 422);
+        $datos = $request->validate(['ubicacion_id' => ['required', 'exists:ubicaciones,id']]);
+
+        $cantidad = $linea->piezas_confirmadas - $linea->piezas_sin_accesorio;
+        $destino = Ubicacion::findOrFail($datos['ubicacion_id']);
+
+        DB::transaction(function () use ($inventario, $linea, $recepcion, $cantidad, $destino) {
+            if ($cantidad > 0) {
+                $inventario->mover('ubicacion', $linea->producto_id, $recepcion->pedimento_id,
+                    ['ubicacion_id' => Ubicacion::zona('recepcion')->id, 'estado' => 'disponible'],
+                    ['ubicacion_id' => $destino->id, 'estado' => 'disponible'], $cantidad, $recepcion, $recepcion->folio);
+            }
+            $linea->update(['ubicacion_id' => $destino->id, 'ubicada_at' => now()]);
+        });
+
+        return back()->with('ok', $cantidad.' piezas de '.$linea->producto->sku.' ubicadas en '.$destino->codigo.'.');
+    }
+
+    /** Alta de una recepción desde el Excel del propietario (SKU, cajas, piezas por caja). */
+    public function importar(Request $request)
+    {
+        $datos = $request->validate([
+            'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:5120'],
+            'pedimento' => ['required', 'string', 'max:21'],
+            'contenedor' => ['nullable', 'string', 'max:15'],
+            'fecha_esperada' => ['required', 'date'],
+        ]);
+
+        $filas = IOFactory::load($request->file('archivo')->getRealPath())->getActiveSheet()->toArray();
+        array_shift($filas); // encabezados
+        $productos = Producto::pluck('id', 'sku');
+        $lineas = [];
+        $desconocidos = [];
+        foreach ($filas as $fila) {
+            [$sku, $cajas, $ppc] = array_pad(array_map(fn ($v) => trim((string) $v), $fila), 3, '');
+            if ($sku === '') {
+                continue;
+            }
+            if (! isset($productos[$sku])) {
+                $desconocidos[] = $sku;
+
+                continue;
+            }
+            $lineas[] = ['producto_id' => $productos[$sku], 'cajas_esperadas' => (int) $cajas, 'piezas_por_caja' => (int) $ppc,
+                'piezas_esperadas' => (int) $cajas * (int) $ppc];
+        }
+
+        if ($desconocidos) {
+            return back()->with('error', 'SKU que no están en el catálogo: '.implode(', ', array_unique($desconocidos)).'.');
+        }
+        if (! $lineas) {
+            return back()->with('error', 'El archivo no trae líneas. Columnas esperadas: SKU, cajas, piezas por caja.');
+        }
+
+        $recepcion = DB::transaction(function () use ($datos, $lineas) {
+            $pedimento = Pedimento::firstOrCreate(['numero' => $datos['pedimento']], [
+                'clave' => 'A1', 'aduana' => 'Manzanillo, Col.', 'contenedor' => $datos['contenedor'] ?? null,
+                'proveedor' => 'Por confirmar', 'fecha_pago' => now()->toDateString(),
+            ]);
+            $recepcion = Recepcion::create([
+                'folio' => sprintf('REC-%04d', (Recepcion::max('id') ?? 0) + 1),
+                'pedimento_id' => $pedimento->id,
+                'origen' => 'Excel importado',
+                'fecha_esperada' => $datos['fecha_esperada'],
+            ]);
+            $recepcion->lineas()->createMany($lineas);
+
+            return $recepcion;
+        });
+
+        return redirect('/recepciones/'.$recepcion->id)->with('ok', count($lineas).' líneas importadas.');
+    }
+
+    public function plantilla()
+    {
+        $libro = new Spreadsheet;
+        $hoja = $libro->getActiveSheet();
+        $hoja->fromArray([['SKU', 'Cajas', 'Piezas por caja']] + [1 => ['PLA-BAS-M', 10, 24], 2 => ['SUD-CAP-M', 6, 12]]);
+        $ruta = storage_path('app/plantilla-recepcion.xlsx');
+        (new Xlsx($libro))->save($ruta);
+
+        return response()->download($ruta, 'plantilla-recepcion.xlsx')->deleteFileAfterSend();
+    }
+
+    private function incidencia(Recepcion $r, RecepcionLinea $l, string $tipo, int $cantidad, string $descripcion, int $userId): void
+    {
+        Incidencia::create([
+            'folio' => Incidencia::siguienteFolio(),
+            'tipo' => $tipo,
+            'origen_type' => 'recepcion',
+            'origen_id' => $r->id,
+            'origen_folio' => $r->folio,
+            'producto_id' => $l->producto_id,
+            'pedimento_id' => $r->pedimento_id,
+            'cantidad' => $cantidad,
+            'descripcion' => $descripcion,
+            'reporto_id' => $userId,
+        ]);
+    }
+
+    /** Sugiere un rack donde ya está el SKU con espacio; si no, el más vacío. */
+    private function sugerirUbicacion(RecepcionLinea $l): ?Ubicacion
+    {
+        $necesita = $l->piezas_confirmadas - $l->piezas_sin_accesorio;
+        $candidatas = Ubicacion::whereIn('zona', ['rack', 'adicional'])->where('activa', true)->orderBy('codigo')->get()
+            ->map(fn ($u) => [$u, (int) Existencia::where('ubicacion_id', $u->id)->sum('cantidad'),
+                Existencia::where('ubicacion_id', $u->id)->where('producto_id', $l->producto_id)->exists()]);
+
+        $conSku = $candidatas->first(fn ($c) => $c[2] && $c[0]->capacidad - $c[1] >= $necesita);
+        if ($conSku) {
+            return $conSku[0];
+        }
+
+        return $candidatas->filter(fn ($c) => $c[0]->capacidad - $c[1] >= $necesita)->sortBy(fn ($c) => $c[1])->first()[0]
+            ?? $candidatas->sortBy(fn ($c) => $c[1])->first()[0] ?? null;
+    }
+}
