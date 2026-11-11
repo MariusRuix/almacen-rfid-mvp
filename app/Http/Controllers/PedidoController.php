@@ -285,16 +285,30 @@ class PedidoController extends Controller
         return back()->with('ok', 'Se aceptó la lectura de '.$destino->destino->codigo.' y la diferencia quedó como incidencia.');
     }
 
+    /** Marca o desmarca una actividad de preparación (etiquetas, sensor) sin tocar cantidades ni la verificación. */
+    public function actividad(Request $request, PedidoDestino $destino)
+    {
+        $destino->load(['pedido', 'destino']);
+        abort_if($destino->pedido->estado === 'despachado', 422);
+        $datos = $request->validate([
+            'campo' => ['required', 'string', \Illuminate\Validation\Rule::in(array_keys($destino->actividades()))],
+            'hecha' => ['required', 'boolean'],
+        ]);
+        $destino->update([$datos['campo'] => $datos['hecha']]);
+
+        return back()->with('ok', $destino->actividades()[$datos['campo']].' de '.$destino->destino->codigo.($datos['hecha'] ? ' marcada.' : ' desmarcada.'));
+    }
+
     /** Salida: descuenta del inventario lo preparado y lo deja en el historial. */
     public function despachar(Request $request, Pedido $pedido, Inventario $inventario)
     {
         $pedido->load(['destinos.destino', 'lineas', 'tareas']);
-        if ($pedido->estado !== 'listo') {
+        if ($pedido->estado !== 'listo' || $pedido->destinos->contains(fn ($d) => $d->estado !== 'verificado')) {
             return back()->with('error', 'Todos los destinos deben estar verificados antes de la salida.');
         }
         $pendientes = $pedido->destinos->reject->actividadesCompletas()->map(fn ($d) => $d->destino->codigo);
         if ($pendientes->isNotEmpty()) {
-            return back()->with('error', 'Faltan actividades de preparación en: '.$pendientes->implode(', ').'.');
+            return back()->with('error', 'Faltan actividades de preparación en: '.$pendientes->implode(', ').'. Márcalas en cada destino del pedido.');
         }
 
         $datos = $request->validate([

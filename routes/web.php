@@ -49,6 +49,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/pedidos/{pedido}/despachar', [PedidoController::class, 'despachar'])->middleware('rol:responsable');
     Route::post('/pedido-destinos/{destino}/leer', [PedidoController::class, 'leerDestino']);
     Route::post('/pedido-destinos/{destino}/corregir', [PedidoController::class, 'corregirDestino']);
+    Route::post('/pedido-destinos/{destino}/actividades', [PedidoController::class, 'actividad']);
     Route::post('/pedido-destinos/{destino}/aceptar', [PedidoController::class, 'aceptarLectura'])->middleware('rol:responsable');
 
     // Catálogo de destinos

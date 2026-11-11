@@ -40,6 +40,14 @@ const dif = (l: { leida: number | null; separada: number | null }) => (l.leida =
 function liberar() {
     router.post(`/pedidos/${props.pedido.id}/liberar`, {}, opciones);
 }
+function marcar(d: DestinoPedido, campo: string, hecha: boolean) {
+    router.post(`/pedido-destinos/${d.id}/actividades`, { campo, hecha }, opciones);
+}
+const actividadesPendientes = computed(() =>
+    props.pedido.destinos
+        .map((d) => ({ codigo: d.codigo, faltan: d.actividades.filter((a) => !a.hecha).map((a) => a.etiqueta.toLowerCase()) }))
+        .filter((d) => d.faltan.length),
+);
 function leer(d: DestinoPedido) {
     router.post(`/pedido-destinos/${d.id}/leer`, {}, opciones);
 }
@@ -123,11 +131,24 @@ function despachar() {
                         <p class="flex items-center gap-2"><span class="font-id font-semibold">{{ d.codigo }}</span><Chip :valor="d.estado" :mapa="estadosDestino" /></p>
                         <p class="text-sm text-ink-2">{{ d.nombre }}<template v-if="d.bultos"> · {{ d.bultos }} {{ d.bultos === 1 ? 'bulto' : 'bultos' }}</template></p>
                     </div>
-                    <ul class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <ul v-if="pedido.estado === 'despachado' || d.estado === 'pendiente'" class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                         <li v-for="a in d.actividades" :key="a.campo" class="flex items-center gap-1" :class="a.hecha ? 'text-ok' : 'text-ink-3'">
                             <component :is="a.hecha ? Check : Circle" class="size-3.5" aria-hidden="true" />{{ a.etiqueta }}
                         </li>
                     </ul>
+                    <!-- Ya separado: las actividades se marcan aquí sin afectar cantidades ni la lectura RFID. -->
+                    <fieldset v-else class="flex flex-wrap gap-2">
+                        <legend class="sr-only">Preparación de {{ d.codigo }}</legend>
+                        <label
+                            v-for="a in d.actividades"
+                            :key="a.campo"
+                            class="flex min-h-9 cursor-pointer items-center gap-2 rounded-ui border px-2.5 text-xs font-semibold"
+                            :class="a.hecha ? 'border-transparent bg-ok-bg text-ok' : 'border-warn/40 bg-warn-bg text-warn'"
+                        >
+                            <input type="checkbox" class="size-4 accent-[var(--ok)]" :checked="a.hecha" @change="marcar(d, a.campo, ($event.target as HTMLInputElement).checked)" />
+                            {{ a.etiqueta }}
+                        </label>
+                    </fieldset>
                 </header>
 
                 <div class="overflow-x-auto">
@@ -178,7 +199,15 @@ function despachar() {
                 </dl>
                 <Link :href="`/movimientos?folio=${pedido.salida.folio}`" class="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">Ver la salida en el historial <ExternalLink class="size-4" /></Link>
             </div>
-            <form v-else-if="esResponsable" class="grid gap-4 px-5 py-5 md:grid-cols-[1.5fr_1fr_1fr_auto] md:items-end" @submit.prevent="despachar">
+            <div v-else-if="actividadesPendientes.length" class="px-5 pt-5">
+                <Resultado estado="parcial" titulo="Falta preparación antes de la salida">
+                    <ul class="mt-1 space-y-0.5">
+                        <li v-for="p in actividadesPendientes" :key="p.codigo"><b class="font-id">{{ p.codigo }}</b>: {{ p.faltan.join(', ') }}</li>
+                    </ul>
+                    <p class="mt-1">Márcalas en la tarjeta de cada destino, arriba.</p>
+                </Resultado>
+            </div>
+            <form v-if="!pedido.salida && esResponsable" class="grid gap-4 px-5 py-5 md:grid-cols-[1.5fr_1fr_1fr_auto] md:items-end" @submit.prevent="despachar">
                 <div>
                     <label for="transportista" class="etiqueta">Transportista</label>
                     <input id="transportista" v-model="salida.transportista" class="campo" required />
@@ -192,9 +221,9 @@ function despachar() {
                     <label for="sello" class="etiqueta">Sello</label>
                     <input id="sello" v-model="salida.sello" class="campo font-id uppercase" placeholder="S-000000" required />
                 </div>
-                <button type="submit" class="btn btn-primario" :disabled="salida.processing"><Truck class="size-4" />Autorizar salida</button>
+                <button type="submit" class="btn btn-primario" :disabled="salida.processing || actividadesPendientes.length > 0"><Truck class="size-4" />Autorizar salida</button>
             </form>
-            <p v-else class="px-5 py-5 text-ink-2">La responsable operativa autoriza la salida.</p>
+            <p v-else-if="!pedido.salida" class="px-5 py-5 text-ink-2">La responsable operativa autoriza la salida.</p>
         </section>
 
         <div class="mt-5 grid gap-3 lg:grid-cols-2">

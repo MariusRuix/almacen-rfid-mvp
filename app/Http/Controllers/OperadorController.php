@@ -110,7 +110,7 @@ class OperadorController extends Controller
     public function confirmarDestino(Request $request, PedidoDestino $destino)
     {
         $pedido = $destino->pedido;
-        abort_unless(in_array($pedido->estado, ['en_separacion', 'en_revision']), 422);
+        abort_unless(in_array($pedido->estado, ['en_separacion', 'en_revision', 'listo']), 422);
         $destino->load(['lineas', 'destino']);
 
         $datos = $request->validate([
@@ -128,6 +128,7 @@ class OperadorController extends Controller
             $actividades = array_intersect_key($datos['actividades'] ?? [], $destino->actividades());
             $destino->update($actividades + ['bultos' => $datos['bultos'], 'estado' => 'separado', 'verificado_at' => null]);
 
+            // Un destino re-separado se vuelve a leer, así que el pedido regresa a revisión.
             if (! $pedido->destinos()->where('estado', 'pendiente')->exists()) {
                 $pedido->update(['estado' => 'en_revision']);
             }

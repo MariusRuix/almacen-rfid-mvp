@@ -27,6 +27,7 @@ watch(
     },
     { immediate: true },
 );
+const sinMarcar = computed(() => (actual.value?.actividades ?? []).filter((a) => !datos.actividades[a.campo]).map((a) => a.etiqueta.toLowerCase()));
 const procesando = ref(false);
 const errores = ref<Record<string, string>>({});
 
@@ -101,6 +102,7 @@ function confirmar(d: DestinoPedido) {
                     <input id="bultos" v-model.number="datos.bultos" type="number" min="1" inputmode="numeric" class="campo num h-14 w-28 text-center text-2xl font-bold" />
                 </div>
                 <p v-for="(e, k) in errores" :key="k" class="text-bad">{{ e }}</p>
+                <p v-if="sinMarcar.length" class="text-warn">Sin marcar: {{ sinMarcar.join(', ') }}. Puedes confirmar el destino y marcarlas después, pero sin ellas no se autoriza la salida.</p>
             </div>
 
             <div class="border-t border-line px-5 py-4">
