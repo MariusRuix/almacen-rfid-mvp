@@ -41,6 +41,8 @@ Route::middleware('auth')->group(function () {
 
     // Pedidos, revisión y salida
     Route::get('/pedidos', [PedidoController::class, 'index']);
+    Route::get('/pedidos/nuevo', [PedidoController::class, 'create'])->middleware('rol:responsable');
+    Route::post('/pedidos', [PedidoController::class, 'store'])->middleware('rol:responsable');
     Route::get('/pedidos/{pedido}', [PedidoController::class, 'show']);
     Route::post('/pedidos/{pedido}/liberar', [PedidoController::class, 'liberar'])->middleware('rol:responsable');
     Route::post('/pedidos/{pedido}/despachar', [PedidoController::class, 'despachar'])->middleware('rol:responsable');

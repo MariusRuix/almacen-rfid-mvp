@@ -5,17 +5,23 @@ import Vacio from '@/Components/Vacio.vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { estadosPedido } from '@/lib/etiquetas';
 import { fecha, n } from '@/lib/formato';
+import { useCompartido } from '@/composables/useCompartido';
 import { Head, Link } from '@inertiajs/vue3';
+import { Plus } from 'lucide-vue-next';
 
 defineProps<{
     pedidos: { id: number; folio: string; propietario: string; estado: string; fecha_compromiso: string; destinos: number; piezas: number }[];
 }>();
+
+const { esResponsable } = useCompartido();
 </script>
 
 <template>
     <Head title="Pedidos" />
     <AppLayout>
-        <Encabezado titulo="Pedidos y salida" descripcion="Pedidos del propietario repartidos por destino: toma, separación, revisión y salida." />
+        <Encabezado titulo="Pedidos y salida" descripcion="Pedidos del propietario repartidos por destino: toma, separación, revisión y salida.">
+            <Link v-if="esResponsable" href="/pedidos/nuevo" class="btn btn-primario"><Plus class="size-4" />Nuevo pedido</Link>
+        </Encabezado>
         <section class="panel overflow-x-auto">
             <table v-if="pedidos.length" class="tabla">
                 <thead><tr><th>Folio</th><th>Propietario</th><th>Compromiso</th><th class="der">Destinos</th><th class="der">Piezas</th><th>Estado</th></tr></thead>

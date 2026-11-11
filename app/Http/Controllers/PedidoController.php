@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Destino;
 use App\Models\Existencia;
 use App\Models\Incidencia;
 use App\Models\Pedido;
 use App\Models\PedidoDestino;
+use App\Models\Producto;
 use App\Models\Salida;
 use App\Models\TareaSurtido;
 use App\Models\Ubicacion;
@@ -33,6 +35,69 @@ class PedidoController extends Controller
                 'piezas' => (int) $p->lineas_sum_cantidad,
             ]),
         ]);
+    }
+
+    /** Captura manual: matriz de SKU por destino, como el reparto que prepara la responsable. */
+    public function create(): Response
+    {
+        $surtibles = Ubicacion::whereIn('zona', ['rack', 'adicional'])->pluck('id');
+        $disponible = Existencia::where('estado', 'disponible')->whereIn('ubicacion_id', $surtibles)
+            ->selectRaw('producto_id, sum(cantidad) as piezas')->groupBy('producto_id')->pluck('piezas', 'producto_id');
+
+        return Inertia::render('Pedidos/Create', [
+            'productos' => Producto::orderBy('sku')->get()->map(fn ($p) => [
+                ...Presentar::producto($p),
+                'disponible' => (int) ($disponible[$p->id] ?? 0),
+            ]),
+            'destinos' => Destino::orderBy('codigo')->get()->map(fn ($d) => [
+                'id' => $d->id, 'codigo' => $d->codigo, 'nombre' => $d->nombre, 'tipo' => $d->tipo,
+                'requiere_etiqueta_comercial' => $d->requiere_etiqueta_comercial, 'requiere_sensor' => $d->requiere_sensor,
+            ]),
+            'propietarios' => Pedido::distinct()->orderBy('propietario')->pluck('propietario'),
+            'manana' => now()->addDay()->toDateString(),
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $datos = $request->validate([
+            'propietario' => ['required', 'string', 'max:120'],
+            'fecha_compromiso' => ['required', 'date'],
+            'celdas' => ['required', 'array', 'min:1', 'max:2000'],
+            'celdas.*.producto_id' => ['required', 'integer', 'exists:productos,id'],
+            'celdas.*.destino_id' => ['required', 'integer', 'exists:destinos,id'],
+            'celdas.*.cantidad' => ['required', 'integer', 'min:1', 'max:100000'],
+        ], [
+            'propietario.required' => 'Indica de quién es la mercancía.',
+            'fecha_compromiso.required' => 'Indica la fecha compromiso.',
+            'celdas.required' => 'Captura al menos una cantidad para un destino.',
+            'celdas.min' => 'Captura al menos una cantidad para un destino.',
+            'celdas.*.cantidad.min' => 'Las cantidades deben ser mayores a cero.',
+            'celdas.*.cantidad.integer' => 'Las cantidades deben ser números enteros.',
+        ]);
+
+        $pares = collect($datos['celdas'])->map(fn ($c) => $c['producto_id'].'-'.$c['destino_id']);
+        if ($pares->duplicates()->isNotEmpty()) {
+            return back()->withErrors(['celdas' => 'Hay un SKU repetido para el mismo destino.']);
+        }
+
+        $pedido = DB::transaction(function () use ($datos) {
+            $pedido = Pedido::create([
+                'folio' => sprintf('PED-%04d', (Pedido::max('id') ?? 0) + 1),
+                'propietario' => $datos['propietario'],
+                'fecha_compromiso' => $datos['fecha_compromiso'],
+            ]);
+            foreach (collect($datos['celdas'])->groupBy('destino_id') as $destinoId => $celdas) {
+                $pd = $pedido->destinos()->create(['destino_id' => (int) $destinoId]);
+                foreach ($celdas as $c) {
+                    $pd->lineas()->create(['pedido_id' => $pedido->id, 'producto_id' => (int) $c['producto_id'], 'cantidad' => (int) $c['cantidad']]);
+                }
+            }
+
+            return $pedido;
+        });
+
+        return redirect('/pedidos/'.$pedido->id)->with('ok', 'Pedido '.$pedido->folio.' creado. Revísalo y libéralo a surtido.');
     }
 
     public function show(Pedido $pedido): Response
