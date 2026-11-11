@@ -1,0 +1,43 @@
+{
+    "name": "demo/almacen-rfid-mvp",
+    "type": "project",
+    "description": "MVP de demostración: control de almacén con pedimentos y RFID (Laravel + Inertia + Vue).",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "inertiajs/inertia-laravel": "^2.0",
+        "laravel/framework": "^12.0",
+        "laravel/tinker": "^2.10",
+        "phpoffice/phpspreadsheet": "^3.3 || ^4.0 || ^5.0"
+    },
+    "require-dev": {
+        "laravel/pail": "^1.2",
+        "laravel/pint": "^1.20"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "setup": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
+            "@php artisan key:generate --ansi",
+            "@php artisan migrate:fresh --seed --force"
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
