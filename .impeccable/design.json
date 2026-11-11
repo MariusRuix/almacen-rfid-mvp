@@ -1,0 +1,36 @@
+{
+  "themes": {
+    "contenedor": {
+      "rail": "#15304a",
+      "ground": "#e9edf1",
+      "ink": "#142130",
+      "primary": "#1c4f7e",
+      "marca": "#d0561c",
+      "fontUi": "Barlow",
+      "fontDisplay": "Barlow Semi Condensed",
+      "fontId": "JetBrains Mono",
+      "radius": "4px"
+    },
+    "semaforo": {
+      "rail": "#1b1c1e",
+      "ground": "#ecebe6",
+      "ink": "#1b1c1e",
+      "primary": "#1b1c1e",
+      "luzVerde": "#19c25c",
+      "luzAmbar": "#ffb300",
+      "luzRoja": "#f0352a",
+      "fontUi": "Public Sans",
+      "fontId": "JetBrains Mono",
+      "radius": "6px"
+    }
+  },
+  "state": {
+    "ok": "#18794e",
+    "warn": "#9a5b00",
+    "bad": "#b4232b"
+  },
+  "signature": [
+    "IdSegmentado",
+    "Resultado"
+  ]
+}
