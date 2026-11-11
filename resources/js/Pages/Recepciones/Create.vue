@@ -122,7 +122,7 @@ function guardar() {
                 </div>
                 <div>
                     <label for="contenedor" class="etiqueta">Contenedor <span class="font-normal text-ink-3">(opcional)</span></label>
-                    <input id="contenedor" v-model="form.contenedor" class="campo font-id uppercase" placeholder="TXAU1047728" autocomplete="off" />
+                    <input id="contenedor" v-model="form.contenedor" class="campo font-id uppercase placeholder:normal-case" placeholder="TXAU1047728" autocomplete="off" />
                     <p v-if="form.errors.contenedor" class="mt-1.5 text-sm text-bad">{{ form.errors.contenedor }}</p>
                     <p v-else-if="contenedorOk === true" class="mt-1.5 flex items-center gap-1.5 text-sm text-ok"><CircleCheck class="size-4" aria-hidden="true" />Dígito verificador correcto</p>
                     <p v-else-if="contenedorOk === false" class="mt-1.5 flex items-center gap-1.5 text-sm text-bad"><CircleAlert class="size-4" aria-hidden="true" />El dígito verificador no coincide</p>
@@ -160,7 +160,7 @@ function guardar() {
                                         :id="`sku-${r.clave}`"
                                         v-model="r.sku"
                                         list="lista-skus"
-                                        class="campo font-id uppercase"
+                                        class="campo font-id uppercase placeholder:normal-case"
                                         :class="{ 'border-bad': desconocido(r) || repetido(r) }"
                                         placeholder="Busca por SKU"
                                         autocomplete="off"

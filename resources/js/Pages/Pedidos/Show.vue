@@ -214,12 +214,12 @@ function despachar() {
                 </div>
                 <div>
                     <label for="placas" class="etiqueta">Placas</label>
-                    <input id="placas" v-model="salida.placas" class="campo font-id uppercase" placeholder="ABC-123-D" required />
+                    <input id="placas" v-model="salida.placas" class="campo font-id uppercase placeholder:normal-case" placeholder="ABC-123-D" required />
                     <p v-if="salida.errors.placas" class="mt-1 text-sm text-bad">{{ salida.errors.placas }}</p>
                 </div>
                 <div>
                     <label for="sello" class="etiqueta">Sello</label>
-                    <input id="sello" v-model="salida.sello" class="campo font-id uppercase" placeholder="S-000000" required />
+                    <input id="sello" v-model="salida.sello" class="campo font-id uppercase placeholder:normal-case" placeholder="S-000000" required />
                 </div>
                 <button type="submit" class="btn btn-primario" :disabled="salida.processing || actividadesPendientes.length > 0"><Truck class="size-4" />Autorizar salida</button>
             </form>

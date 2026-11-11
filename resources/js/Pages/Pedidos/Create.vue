@@ -168,7 +168,7 @@ function guardar() {
                                         :id="`sku-${r.clave}`"
                                         v-model="r.sku"
                                         list="lista-skus"
-                                        class="campo font-id uppercase"
+                                        class="campo font-id uppercase placeholder:normal-case"
                                         :class="{ 'border-bad': desconocido(r) || repetido(r) }"
                                         placeholder="Busca por SKU"
                                         autocomplete="off"

@@ -76,7 +76,7 @@ function borrar(p: Producto) {
             <div class="grid gap-5 md:grid-cols-[1fr_0.7fr_2fr]">
                 <div>
                     <label for="sku" class="etiqueta">SKU</label>
-                    <input id="sku" v-model="form.sku" class="campo font-id uppercase" placeholder="CAM-OXF-L" maxlength="30" autocomplete="off" required />
+                    <input id="sku" v-model="form.sku" class="campo font-id uppercase placeholder:normal-case" placeholder="CAM-OXF-L" maxlength="30" autocomplete="off" required />
                     <p v-if="form.errors.sku" class="mt-1.5 text-sm text-bad">{{ form.errors.sku }}</p>
                     <p v-else-if="editando?.en_uso" class="mt-1.5 text-xs text-ink-3">Ya tiene movimientos: cambiar el SKU lo cambia también en el historial.</p>
                 </div>

@@ -70,7 +70,7 @@ function cambiarTipo() {
             <div class="grid gap-5 md:grid-cols-[0.6fr_1.4fr_0.8fr]">
                 <div>
                     <label for="codigo" class="etiqueta">Código</label>
-                    <input id="codigo" v-model="form.codigo" class="campo font-id uppercase" placeholder="T-045" maxlength="12" autocomplete="off" required />
+                    <input id="codigo" v-model="form.codigo" class="campo font-id uppercase placeholder:normal-case" placeholder="T-045" maxlength="12" autocomplete="off" required />
                     <p v-if="form.errors.codigo" class="mt-1.5 text-sm text-bad">{{ form.errors.codigo }}</p>
                 </div>
                 <div>
