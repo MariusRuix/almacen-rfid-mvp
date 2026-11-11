@@ -9,7 +9,7 @@ import { estadosRecepcion } from '@/lib/etiquetas';
 import { conSigno, fecha, n } from '@/lib/formato';
 import type { Pedimento } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { FileSpreadsheet, Upload } from 'lucide-vue-next';
+import { FileSpreadsheet, PencilLine, Upload } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 defineProps<{
@@ -40,6 +40,7 @@ function importar() {
             <template v-if="esResponsable">
                 <a href="/recepciones/plantilla" class="btn btn-secundario"><FileSpreadsheet class="size-4" />Plantilla Excel</a>
                 <button type="button" class="btn btn-primario" @click="mostrarImportar = !mostrarImportar"><Upload class="size-4" />Importar Excel</button>
+                <Link href="/recepciones/nueva" class="btn btn-primario"><PencilLine class="size-4" />Captura manual</Link>
             </template>
         </Encabezado>
 

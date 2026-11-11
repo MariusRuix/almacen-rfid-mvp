@@ -25,6 +25,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/recepciones', [RecepcionController::class, 'index']);
     Route::get('/recepciones/plantilla', [RecepcionController::class, 'plantilla']);
     Route::post('/recepciones/importar', [RecepcionController::class, 'importar'])->middleware('rol:responsable');
+    Route::get('/recepciones/nueva', [RecepcionController::class, 'create'])->middleware('rol:responsable');
+    Route::post('/recepciones', [RecepcionController::class, 'store'])->middleware('rol:responsable');
     Route::get('/recepciones/{recepcion}', [RecepcionController::class, 'show']);
     Route::post('/recepciones/{recepcion}/leer', [RecepcionController::class, 'leerRfid']);
     Route::post('/recepciones/{recepcion}/releer', [RecepcionController::class, 'releer']);

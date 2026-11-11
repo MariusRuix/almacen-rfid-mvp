@@ -13,6 +13,7 @@ use App\Services\Inventario;
 use App\Services\Rfid\Epc;
 use App\Services\Rfid\LectorRfid;
 use App\Services\Rfid\LectorSimulado;
+use App\Support\Contenedor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -187,12 +188,11 @@ class RecepcionController extends Controller
     /** Alta de una recepción desde el Excel del propietario (SKU, cajas, piezas por caja). */
     public function importar(Request $request)
     {
+        $this->normalizarEncabezado($request);
         $datos = $request->validate([
             'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:5120'],
-            'pedimento' => ['required', 'string', 'max:21'],
-            'contenedor' => ['nullable', 'string', 'max:15'],
-            'fecha_esperada' => ['required', 'date'],
-        ]);
+            ...$this->reglasEncabezado(),
+        ], $this->mensajes());
 
         $filas = IOFactory::load($request->file('archivo')->getRealPath())->getActiveSheet()->toArray();
         array_shift($filas); // encabezados
@@ -220,23 +220,110 @@ class RecepcionController extends Controller
             return back()->with('error', 'El archivo no trae líneas. Columnas esperadas: SKU, cajas, piezas por caja.');
         }
 
-        $recepcion = DB::transaction(function () use ($datos, $lineas) {
+        $recepcion = $this->crearRecepcion($datos, $lineas, 'Excel importado');
+
+        return redirect('/recepciones/'.$recepcion->id)->with('ok', count($lineas).' líneas importadas.');
+    }
+
+    /** Formulario para capturar a mano una recepción (urgente o pequeña). */
+    public function create(): Response
+    {
+        return Inertia::render('Recepciones/Create', [
+            'productos' => Producto::orderBy('sku')->get()->map(fn ($p) => Presentar::producto($p)),
+            'pedimentos' => Pedimento::orderByDesc('fecha_pago')->get()->map(fn ($p) => Presentar::pedimento($p)),
+            'hoy' => now()->toDateString(),
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $this->normalizarEncabezado($request);
+        $datos = $request->validate([
+            ...$this->reglasEncabezado(),
+            'lineas' => ['required', 'array', 'min:1', 'max:200'],
+            'lineas.*.producto_id' => ['required', 'integer', 'distinct', 'exists:productos,id'],
+            'lineas.*.cajas' => ['required', 'integer', 'min:1', 'max:10000'],
+            'lineas.*.piezas_por_caja' => ['required', 'integer', 'min:1', 'max:10000'],
+        ], [
+            ...$this->mensajes(),
+            'lineas.required' => 'Agrega al menos un SKU.',
+            'lineas.*.producto_id.required' => 'Elige un SKU del catálogo.',
+            'lineas.*.producto_id.exists' => 'Ese SKU no está en el catálogo.',
+            'lineas.*.producto_id.distinct' => 'Este SKU ya está en otro renglón.',
+            'lineas.*.cajas.min' => 'Al menos 1 caja.',
+            'lineas.*.cajas.required' => 'Indica el número de cajas.',
+            'lineas.*.cajas.integer' => 'Solo números enteros.',
+            'lineas.*.cajas.max' => 'Máximo 10,000 cajas.',
+            'lineas.*.piezas_por_caja.min' => 'Al menos 1 pieza por caja.',
+            'lineas.*.piezas_por_caja.required' => 'Indica las piezas por caja.',
+            'lineas.*.piezas_por_caja.integer' => 'Solo números enteros.',
+            'lineas.*.piezas_por_caja.max' => 'Máximo 10,000 piezas por caja.',
+        ]);
+
+        $lineas = array_map(fn ($l) => [
+            'producto_id' => (int) $l['producto_id'],
+            'cajas_esperadas' => (int) $l['cajas'],
+            'piezas_por_caja' => (int) $l['piezas_por_caja'],
+            'piezas_esperadas' => (int) $l['cajas'] * (int) $l['piezas_por_caja'],
+        ], $datos['lineas']);
+
+        $recepcion = $this->crearRecepcion($datos, $lineas, 'Captura manual');
+
+        return redirect('/recepciones/'.$recepcion->id)->with('ok', 'Recepción '.$recepcion->folio.' creada con '.count($lineas).' SKU.');
+    }
+
+    private function crearRecepcion(array $datos, array $lineas, string $origen): Recepcion
+    {
+        return DB::transaction(function () use ($datos, $lineas, $origen) {
             $pedimento = Pedimento::firstOrCreate(['numero' => $datos['pedimento']], [
-                'clave' => 'A1', 'aduana' => 'Manzanillo, Col.', 'contenedor' => $datos['contenedor'] ?? null,
+                'clave' => 'A1', 'aduana' => 'Por confirmar', 'contenedor' => $datos['contenedor'] ?? null,
                 'proveedor' => 'Por confirmar', 'fecha_pago' => now()->toDateString(),
             ]);
             $recepcion = Recepcion::create([
                 'folio' => sprintf('REC-%04d', (Recepcion::max('id') ?? 0) + 1),
                 'pedimento_id' => $pedimento->id,
-                'origen' => 'Excel importado',
+                'origen' => $origen,
                 'fecha_esperada' => $datos['fecha_esperada'],
             ]);
             $recepcion->lineas()->createMany($lineas);
 
             return $recepcion;
         });
+    }
 
-        return redirect('/recepciones/'.$recepcion->id)->with('ok', count($lineas).' líneas importadas.');
+    /** Acepta el pedimento con o sin espacios y el contenedor en minúsculas o con espacios. */
+    private function normalizarEncabezado(Request $request): void
+    {
+        $digitos = preg_replace('/\D/', '', (string) $request->input('pedimento'));
+        $request->merge([
+            'pedimento' => strlen($digitos) === 15
+                ? substr($digitos, 0, 2).' '.substr($digitos, 2, 2).' '.substr($digitos, 4, 4).' '.substr($digitos, 8)
+                : trim((string) $request->input('pedimento')),
+            'contenedor' => strtoupper(preg_replace('/\s+/', '', (string) $request->input('contenedor'))) ?: null,
+        ]);
+    }
+
+    private function reglasEncabezado(): array
+    {
+        return [
+            'pedimento' => ['required', 'regex:/^\d{2} \d{2} \d{4} \d{7}$/'],
+            'contenedor' => ['nullable', 'regex:/^[A-Z]{4}\d{7}$/', function (string $campo, $valor, $falla) {
+                if ($valor && Contenedor::digito(substr($valor, 0, 10)) !== (int) substr($valor, 10)) {
+                    $falla('El dígito verificador no coincide: revisa el número del contenedor.');
+                }
+            }],
+            'fecha_esperada' => ['required', 'date'],
+        ];
+    }
+
+    private function mensajes(): array
+    {
+        return [
+            'pedimento.required' => 'Captura el número de pedimento.',
+            'pedimento.regex' => 'El pedimento lleva 15 dígitos: año, aduana, patente y número.',
+            'contenedor.regex' => 'El contenedor lleva 4 letras y 7 dígitos, por ejemplo TXAU1047728.',
+            'fecha_esperada.required' => 'Indica cuándo llega.',
+        ];
     }
 
     public function plantilla()
