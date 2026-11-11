@@ -8,6 +8,7 @@ use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\MovimientoController;
 use App\Http\Controllers\OperadorController;
 use App\Http\Controllers\PedidoController;
+use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\RecepcionController;
 use App\Http\Controllers\TableroController;
 use Illuminate\Support\Facades\Route;
@@ -57,6 +58,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/destinos', [DestinoController::class, 'store'])->middleware('rol:responsable');
     Route::put('/destinos/{destino}', [DestinoController::class, 'update'])->middleware('rol:responsable');
     Route::delete('/destinos/{destino}', [DestinoController::class, 'destroy'])->middleware('rol:responsable');
+
+    // Catálogo de productos
+    Route::get('/productos', [ProductoController::class, 'index']);
+    Route::post('/productos', [ProductoController::class, 'store'])->middleware('rol:responsable');
+    Route::put('/productos/{producto}', [ProductoController::class, 'update'])->middleware('rol:responsable');
+    Route::delete('/productos/{producto}', [ProductoController::class, 'destroy'])->middleware('rol:responsable');
 
     // Incidencias
     Route::get('/incidencias', [IncidenciaController::class, 'index']);

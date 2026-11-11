@@ -15,6 +15,7 @@ import {
     Menu,
     RotateCcw,
     ScanLine,
+    Tag,
     TriangleAlert,
     X,
 } from 'lucide-vue-next';
@@ -53,7 +54,10 @@ const secciones = computed<{ nombre: string; items: ItemNav[] }[]>(() => [
     },
     {
         nombre: 'Catálogos',
-        items: [{ href: '/destinos', etiqueta: 'Destinos', icono: MapPin }],
+        items: [
+            { href: '/productos', etiqueta: 'Productos', icono: Tag },
+            { href: '/destinos', etiqueta: 'Destinos', icono: MapPin },
+        ],
     },
     {
         nombre: 'Piso',
