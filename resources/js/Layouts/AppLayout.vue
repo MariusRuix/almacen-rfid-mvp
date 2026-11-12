@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import DialogoConfirmacion from '@/Components/DialogoConfirmacion.vue';
 import Flash from '@/Components/Flash.vue';
-import SelectorTema from '@/Components/SelectorTema.vue';
 import { useCompartido } from '@/composables/useCompartido';
 import { confirmar } from '@/composables/useConfirmar';
 import { Link, router } from '@inertiajs/vue3';
@@ -119,7 +118,7 @@ async function reiniciar() {
                     >
                         <span
                             v-if="activo(item.href, item.exacto)"
-                            class="absolute inset-y-1.5 -left-3 w-[3px] rounded-r bg-marca [[data-tema=semaforo]_&]:bg-[var(--luz-verde)]"
+                            class="absolute inset-y-1.5 -left-3 w-[3px] rounded-r bg-marca"
                             aria-hidden="true"
                         />
                         <component :is="item.icono" class="size-[1.15rem] flex-none" aria-hidden="true" />
@@ -135,7 +134,6 @@ async function reiniciar() {
             </nav>
 
             <div class="space-y-3 border-t border-rail-line px-4 py-4">
-                <SelectorTema />
                 <div class="flex items-center justify-between gap-2">
                     <div class="min-w-0">
                         <p class="truncate text-sm font-semibold">{{ usuario?.name }}</p>

@@ -11,12 +11,9 @@
 @source '../js';
 
 /*
- * Dos temas sobre la misma estructura:
- *  - contenedor: rail azul acero, identificadores marcados como número de contenedor.
- *  - semaforo:   rail grafito, validaciones como luz de semáforo fiscal.
+ * Estilo "Contenedor": rail azul acero e identificadores marcados como número de contenedor.
  */
-:root,
-[data-tema='contenedor'] {
+:root {
     --rail: #15304a;
     --rail-2: #1d4062;
     --rail-ink: #e3ecf4;
@@ -50,45 +47,6 @@
     --font-display: 'Barlow Semi Condensed', 'Barlow', ui-sans-serif, sans-serif;
     --font-id: 'JetBrains Mono Variable', ui-monospace, monospace;
     --radius: 4px;
-}
-
-[data-tema='semaforo'] {
-    --rail: #1b1c1e;
-    --rail-2: #2a2b2e;
-    --rail-ink: #f1f0ec;
-    --rail-muted: #a3a29c;
-    --rail-line: #3a3b3f;
-
-    --ground: #ecebe6;
-    --surface: #ffffff;
-    --surface-2: #f6f5f2;
-    --ink: #1b1c1e;
-    --ink-2: #4f4f4c;
-    --ink-3: #74736e;
-    --line: #dad8d1;
-    --line-strong: #bdbab1;
-
-    --primary: #1b1c1e;
-    --primary-hover: #000000;
-    --primary-ink: #ffffff;
-    --marca: #1b1c1e;
-
-    --ok: #0f7a3a;
-    --ok-bg: #ddf3e4;
-    --warn: #8f5a00;
-    --warn-bg: #fbefcf;
-    --bad: #c0261c;
-    --bad-bg: #fbe3e0;
-    --info: #3d4a5c;
-    --info-bg: #e8ebef;
-
-    --luz-verde: #19c25c;
-    --luz-ambar: #ffb300;
-    --luz-roja: #f0352a;
-
-    --font-ui: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
-    --font-display: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
-    --radius: 6px;
 }
 
 @theme inline {
@@ -150,9 +108,6 @@
     :focus-visible {
         outline: 2px solid var(--marca);
         outline-offset: 2px;
-    }
-    [data-tema='semaforo'] :focus-visible {
-        outline-color: var(--luz-ambar);
     }
     input,
     select,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BarraCuadre from '@/Components/BarraCuadre.vue';
 import BarridoRfid from '@/Components/BarridoRfid.vue';
 import Contador from '@/Components/Contador.vue';
 import Girando from '@/Components/Girando.vue';
@@ -371,15 +372,12 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
         <section class="panel mb-4">
             <h2 class="border-b border-line px-5 py-3 text-lg font-bold">Por SKU</h2>
             <ul class="divide-y divide-line">
-                <li v-for="l in recepcion.lineas" :key="l.id" class="flex items-center gap-3 px-5 py-3">
-                    <div class="min-w-0 flex-1">
+                <li v-for="l in recepcion.lineas" :key="l.id" class="grid gap-2 px-5 py-3 sm:grid-cols-[12rem_1fr] sm:items-center">
+                    <div class="min-w-0">
                         <IdSegmentado :valor="l.producto.sku" tipo="sku" />
-                        <p class="text-xs text-ink-3">{{ l.cajas_leidas }} de {{ l.cajas_esperadas }} cajas</p>
+                        <p class="text-xs" :class="estadoSku(l).clase">{{ l.cajas_leidas }} de {{ l.cajas_esperadas }} cajas · {{ estadoSku(l).texto }}</p>
                     </div>
-                    <p class="num text-right">
-                        <b>{{ n(l.confirmadas) }}</b> <span class="text-ink-3">/ {{ n(l.esperadas) }}</span>
-                    </p>
-                    <p class="w-28 text-right text-sm font-semibold" :class="estadoSku(l).clase">{{ estadoSku(l).texto }}</p>
+                    <BarraCuadre :esperado="l.esperadas" :contado="l.cajas_leidas || l.confirmadas ? l.confirmadas : null" />
                 </li>
             </ul>
         </section>

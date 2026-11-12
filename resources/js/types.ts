@@ -94,6 +94,8 @@ export interface PedidoDetalle {
     propietario: string;
     estado: string;
     fecha_compromiso: string;
+    creado: string;
+    incidencias_abiertas: number;
     destinos: DestinoPedido[];
     tareas: Tarea[];
     salida: null | {

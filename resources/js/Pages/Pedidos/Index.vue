@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import Chip from '@/Components/Chip.vue';
+import AvancePedido from '@/Components/AvancePedido.vue';
 import Encabezado from '@/Components/Encabezado.vue';
 import Vacio from '@/Components/Vacio.vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { estadosPedido } from '@/lib/etiquetas';
 import { fecha, n } from '@/lib/formato';
 import { useCompartido } from '@/composables/useCompartido';
 import { Head, Link } from '@inertiajs/vue3';
 import { Plus } from 'lucide-vue-next';
 
 defineProps<{
-    pedidos: { id: number; folio: string; propietario: string; estado: string; fecha_compromiso: string; destinos: number; piezas: number }[];
+    pedidos: {
+        id: number; folio: string; propietario: string; estado: string; fecha_compromiso: string; destinos: number; piezas: number;
+        avance: { tareas: number; tareas_hechas: number; separados: number; verificados: number; con_diferencia: number };
+    }[];
 }>();
 
 const { esResponsable } = useCompartido();
@@ -24,7 +26,7 @@ const { esResponsable } = useCompartido();
         </Encabezado>
         <section class="panel overflow-x-auto">
             <table v-if="pedidos.length" class="tabla">
-                <thead><tr><th>Folio</th><th>Propietario</th><th>Compromiso</th><th class="der">Destinos</th><th class="der">Piezas</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Folio</th><th>Propietario</th><th>Compromiso</th><th class="der">Destinos</th><th class="der">Piezas</th><th class="min-w-56">Avance</th></tr></thead>
                 <tbody>
                     <tr v-for="p in pedidos" :key="p.id">
                         <td><Link :href="`/pedidos/${p.id}`" class="font-id font-semibold text-primary hover:underline">{{ p.folio }}</Link></td>
@@ -32,7 +34,7 @@ const { esResponsable } = useCompartido();
                         <td class="text-ink-2">{{ fecha(p.fecha_compromiso) }}</td>
                         <td class="der">{{ p.destinos }}</td>
                         <td class="der font-semibold">{{ n(p.piezas) }}</td>
-                        <td><Chip :valor="p.estado" :mapa="estadosPedido" /></td>
+                        <td><AvancePedido :avance="{ estado: p.estado, destinos: p.destinos, ...p.avance }" compacto /></td>
                     </tr>
                 </tbody>
             </table>

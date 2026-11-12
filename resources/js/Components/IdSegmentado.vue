@@ -100,11 +100,3 @@ const titulo = computed(() =>
 }
 </style>
 
-<style>
-/* Tema Semáforo: recuadro discreto (sin scoped para poder leer el atributo de <html>) */
-[data-tema='semaforo'] .id-segmentado .id-final {
-    border-width: 1px;
-    border-color: var(--line-strong);
-    background: var(--surface-2);
-}
-</style>

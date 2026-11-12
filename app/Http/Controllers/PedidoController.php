@@ -25,7 +25,12 @@ class PedidoController extends Controller
     public function index(): Response
     {
         return Inertia::render('Pedidos/Index', [
-            'pedidos' => Pedido::withCount('destinos')->withSum('lineas', 'cantidad')->latest('id')->get()->map(fn ($p) => [
+            'pedidos' => Pedido::withCount('destinos')->withSum('lineas', 'cantidad')
+                ->withCount(['tareas', 'tareas as tareas_hechas' => fn ($q) => $q->where('estado', '!=', 'pendiente')])
+                ->withCount(['destinos as separados' => fn ($q) => $q->where('estado', '!=', 'pendiente')])
+                ->withCount(['destinos as verificados' => fn ($q) => $q->where('estado', 'verificado')])
+                ->withCount(['destinos as con_diferencia' => fn ($q) => $q->where('estado', 'con_diferencia')])
+                ->latest('id')->get()->map(fn ($p) => [
                 'id' => $p->id,
                 'folio' => $p->folio,
                 'propietario' => $p->propietario,
@@ -33,6 +38,13 @@ class PedidoController extends Controller
                 'fecha_compromiso' => $p->fecha_compromiso->toDateString(),
                 'destinos' => $p->destinos_count,
                 'piezas' => (int) $p->lineas_sum_cantidad,
+                'avance' => [
+                    'tareas' => $p->tareas_count,
+                    'tareas_hechas' => $p->tareas_hechas,
+                    'separados' => $p->separados,
+                    'verificados' => $p->verificados,
+                    'con_diferencia' => $p->con_diferencia,
+                ],
             ]),
         ]);
     }
@@ -118,6 +130,8 @@ class PedidoController extends Controller
             'propietario' => $pedido->propietario,
             'estado' => $pedido->estado,
             'fecha_compromiso' => $pedido->fecha_compromiso->toDateString(),
+            'creado' => $pedido->created_at->toDateTimeString(),
+            'incidencias_abiertas' => Incidencia::where('origen_type', 'pedido')->where('origen_id', $pedido->id)->where('estado', 'abierta')->count(),
             'destinos' => $pedido->destinos->map(fn (PedidoDestino $d) => [
                 'id' => $d->id,
                 'codigo' => $d->destino->codigo,

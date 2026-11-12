@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import BarraCuadre from '@/Components/BarraCuadre.vue';
 import BarridoRfid from '@/Components/BarridoRfid.vue';
+import AvancePedido, { type DatosAvance } from '@/Components/AvancePedido.vue';
 import Chip from '@/Components/Chip.vue';
+import CondicionesSalida from '@/Components/CondicionesSalida.vue';
 import Girando from '@/Components/Girando.vue';
 import Encabezado from '@/Components/Encabezado.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
@@ -15,7 +18,7 @@ import { estadosDestino, estadosPedido, estadosTarea } from '@/lib/etiquetas';
 import { conSigno, fecha, fechaYHora, n } from '@/lib/formato';
 import type { DestinoPedido, PedidoDetalle } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { Check, Circle, ExternalLink, Hand, Play, ScanLine, Truck, Wrench } from 'lucide-vue-next';
+import { Check, Circle, ExternalLink, Hand, Play, ScanLine, Truck, Wrench, X } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
 
 const props = defineProps<{ pedido: PedidoDetalle; regla: string }>();
@@ -29,15 +32,27 @@ const filaVisible = (d: DestinoPedido, i: number) => leyendoId.value !== d.id ||
 const filaRecien = (d: DestinoPedido, i: number) => leyendoId.value === d.id && lectura.recien(i);
 const separadas = (d: DestinoPedido) => d.lineas.reduce((s, l) => s + (l.separada ?? 0), 0);
 
-const pasos = [
-    { estado: 'nuevo', nombre: 'Recibido' },
-    { estado: 'en_surtido', nombre: 'Toma' },
-    { estado: 'en_separacion', nombre: 'Separación' },
-    { estado: 'en_revision', nombre: 'Revisión' },
-    { estado: 'listo', nombre: 'Listo' },
-    { estado: 'despachado', nombre: 'Salida' },
+const avance = computed<DatosAvance>(() => {
+    const p = props.pedido;
+    return {
+        estado: p.estado,
+        tareas: p.tareas.length,
+        tareas_hechas: p.tareas.filter((t) => t.estado !== 'pendiente').length,
+        destinos: p.destinos.length,
+        separados: p.destinos.filter((d) => d.estado !== 'pendiente').length,
+        verificados: p.destinos.filter((d) => d.estado === 'verificado').length,
+        con_diferencia: p.destinos.filter((d) => d.estado === 'con_diferencia').length,
+        diferencias: p.destinos.filter((d) => d.estado === 'con_diferencia').map((d) => d.codigo),
+        creado: p.creado,
+        salida: p.salida ? { folio: p.salida.folio, fecha: p.salida.fecha } : null,
+    };
+});
+// Mini avance de cada destino: separado → revisado → listo
+const miniPasos = (d: DestinoPedido) => [
+    { nombre: 'Separado', hecho: d.estado !== 'pendiente', mal: false },
+    { nombre: 'Revisado', hecho: d.estado === 'verificado', mal: d.estado === 'con_diferencia' },
+    { nombre: 'Listo', hecho: d.estado === 'verificado' && d.actividades.every((a) => a.hecha), mal: false },
 ];
-const pasoActual = computed(() => pasos.findIndex((p) => p.estado === props.pedido.estado));
 
 const totalPiezas = computed(() => props.pedido.destinos.reduce((s, d) => s + d.lineas.reduce((t, l) => t + l.cantidad, 0), 0));
 const enRevision = computed(() => ['en_revision', 'listo'].includes(props.pedido.estado));
@@ -55,6 +70,12 @@ function liberar() {
 function marcar(d: DestinoPedido, campo: string, hecha: boolean) {
     router.post(`/pedido-destinos/${d.id}/actividades`, { campo, hecha }, { ...opciones, ...con(`marcar-${d.id}-${campo}`) });
 }
+const puedeSalir = computed(
+    () =>
+        props.pedido.estado === 'listo' &&
+        props.pedido.destinos.every((d) => d.estado === 'verificado' && d.actividades.every((a) => a.hecha)) &&
+        !!(salida.transportista.trim() && salida.placas.trim() && salida.sello.trim()),
+);
 const actividadesPendientes = computed(() =>
     props.pedido.destinos
         .map((d) => ({ codigo: d.codigo, faltan: d.actividades.filter((a) => !a.hecha).map((a) => a.etiqueta.toLowerCase()) }))
@@ -141,19 +162,9 @@ async function despachar() {
         </Encabezado>
 
         <!-- Avance del pedido -->
-        <ol class="mb-6 flex overflow-x-auto rounded-ui border border-line bg-surface" aria-label="Avance del pedido">
-            <li
-                v-for="(p, i) in pasos"
-                :key="p.estado"
-                class="flex min-w-32 flex-1 items-center gap-2 border-line px-4 py-3 text-sm not-last:border-r"
-                :class="i < pasoActual ? 'text-ink-2' : i === pasoActual ? 'bg-surface-2 font-bold text-ink' : 'text-ink-3'"
-                :aria-current="i === pasoActual ? 'step' : undefined"
-            >
-                <Check v-if="i < pasoActual" class="size-4 text-ok" aria-hidden="true" />
-                <Circle v-else class="size-4" :class="i === pasoActual ? 'fill-marca text-marca' : ''" aria-hidden="true" />
-                {{ p.nombre }}
-            </li>
-        </ol>
+        <section class="panel mb-6 px-5 pt-5 pb-4">
+            <AvancePedido :avance="avance" />
+        </section>
 
         <!-- Instrucciones de toma -->
         <section v-if="pedido.tareas.length" class="panel mb-6">
@@ -183,11 +194,19 @@ async function despachar() {
         <!-- Destinos -->
         <h2 class="mb-3 text-lg font-bold">Destinos</h2>
         <div class="grid gap-5 lg:grid-cols-2">
-            <section v-for="d in pedido.destinos" :key="d.id" class="panel flex flex-col">
+            <section v-for="d in pedido.destinos" :id="`destino-${d.id}`" :key="d.id" class="panel flex scroll-mt-6 flex-col">
                 <header class="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
                     <div>
                         <p class="flex items-center gap-2"><span class="font-id font-semibold">{{ d.codigo }}</span><Chip :valor="d.estado" :mapa="estadosDestino" /></p>
                         <p class="text-sm text-ink-2">{{ d.nombre }}<template v-if="d.bultos"> · {{ d.bultos }} {{ d.bultos === 1 ? 'bulto' : 'bultos' }}</template></p>
+                        <ol class="mt-2 flex items-center gap-1.5 text-xs" :aria-label="`Avance de ${d.codigo}`">
+                            <template v-for="(m, k) in miniPasos(d)" :key="m.nombre">
+                                <li class="flex items-center gap-1" :class="m.hecho ? 'font-semibold text-ok' : m.mal ? 'font-semibold text-bad' : 'text-ink-3'">
+                                    <component :is="m.hecho ? Check : m.mal ? X : Circle" class="size-3.5" aria-hidden="true" />{{ m.nombre }}
+                                </li>
+                                <li v-if="k < 2" class="h-px w-4 bg-line-strong" aria-hidden="true" />
+                            </template>
+                        </ol>
                     </div>
                     <ul v-if="pedido.estado === 'despachado' || d.estado === 'pendiente'" class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                         <li v-for="a in d.actividades" :key="a.campo" class="flex items-center gap-1" :class="a.hecha ? 'text-ok' : 'text-ink-3'">
@@ -212,14 +231,16 @@ async function despachar() {
 
                 <div class="overflow-x-auto">
                     <table class="tabla">
-                        <thead><tr><th>SKU</th><th class="der">Pedido</th><th class="der">Separado</th><th class="der">{{ d.verificacion === 'manual' ? 'Contado' : 'Leído RFID' }}</th><th class="der">Dif.</th></tr></thead>
+                        <thead><tr><th>SKU</th><th class="der">Pedido</th><th class="der">Separado</th><th class="der">{{ d.verificacion === 'manual' ? 'Contado' : 'Leído RFID' }}</th><th class="min-w-40">Cuadre</th></tr></thead>
                         <tbody>
                             <tr v-for="(l, i) in d.lineas" :key="l.id" :class="{ 'bg-bad-bg/50': dif(l) && filaVisible(d, i), 'fila-recien': filaRecien(d, i) }">
                                 <td><IdSegmentado :valor="l.producto.sku" tipo="sku" /></td>
                                 <td class="der">{{ n(l.cantidad) }}</td>
                                 <td class="der" :class="l.separada !== null && l.separada !== l.cantidad ? 'font-semibold text-warn' : ''">{{ n(l.separada) }}</td>
                                 <td class="der" :class="{ 'celda-oculta': !filaVisible(d, i) }">{{ n(l.leida) }}</td>
-                                <td class="der font-semibold" :class="[dif(l) === null ? 'text-ink-3' : dif(l) === 0 ? 'text-ok' : 'text-bad', { 'celda-oculta': !filaVisible(d, i) }]">{{ conSigno(dif(l)) }}</td>
+                                <td>
+                                    <BarraCuadre v-if="filaVisible(d, i) && l.separada !== null" :esperado="l.separada" :contado="l.leida" :cifras="false" />
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -279,9 +300,12 @@ async function despachar() {
         </div>
 
         <!-- Salida -->
-        <section v-if="pedido.estado === 'listo' || pedido.salida" class="panel mt-6">
-            <div class="border-b border-line px-5 py-4">
+        <section v-if="['en_revision', 'listo'].includes(pedido.estado) || pedido.salida" class="panel mt-6">
+            <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-4">
                 <h2 class="text-lg font-bold">Salida</h2>
+                <p v-if="!pedido.salida" class="text-sm" :class="puedeSalir ? 'font-semibold text-ok' : 'text-ink-2'">
+                    {{ puedeSalir ? 'Todo listo para despachar' : '¿Se puede despachar? Revisa lo que falta' }}
+                </p>
             </div>
             <div v-if="pedido.salida" class="space-y-4 px-5 py-5">
                 <Resultado estado="cuadra" :titulo="`Salida ${pedido.salida.folio} registrada`" grande>
@@ -294,13 +318,8 @@ async function despachar() {
                 </dl>
                 <Link :href="`/movimientos?folio=${pedido.salida.folio}`" class="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">Ver la salida en el historial <ExternalLink class="size-4" /></Link>
             </div>
-            <div v-else-if="actividadesPendientes.length" class="px-5 pt-5">
-                <Resultado estado="parcial" titulo="Falta preparación antes de la salida">
-                    <ul class="mt-1 space-y-0.5">
-                        <li v-for="p in actividadesPendientes" :key="p.codigo"><b class="font-id">{{ p.codigo }}</b>: {{ p.faltan.join(', ') }}</li>
-                    </ul>
-                    <p class="mt-1">Márcalas en la tarjeta de cada destino, arriba.</p>
-                </Resultado>
+            <div v-else class="px-5 pt-5">
+                <CondicionesSalida :pedido="pedido" :transporte="salida" />
             </div>
             <form v-if="!pedido.salida && esResponsable" class="grid gap-4 px-5 py-5 md:grid-cols-[1.5fr_1fr_1fr_auto] md:items-end" @submit.prevent="despachar">
                 <div>
@@ -316,7 +335,7 @@ async function despachar() {
                     <label for="sello" class="etiqueta">Sello</label>
                     <input id="sello" v-model="salida.sello" class="campo font-id uppercase placeholder:normal-case" placeholder="S-000000" required />
                 </div>
-                <button type="submit" class="btn btn-primario" :disabled="salida.processing || actividadesPendientes.length > 0">
+                <button type="submit" class="btn btn-primario" :disabled="salida.processing || !puedeSalir">
                     <Girando v-if="salida.processing" /><Truck v-else class="size-4" />{{ salida.processing ? 'Registrando salida…' : 'Autorizar salida' }}
                 </button>
             </form>

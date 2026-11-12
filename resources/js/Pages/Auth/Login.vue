@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import Girando from '@/Components/Girando.vue';
-import SelectorTema from '@/Components/SelectorTema.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ScanLine } from 'lucide-vue-next';
 
@@ -29,10 +28,7 @@ function entrar() {
                     Recorrido de demostración: lo esperado contra lo confirmado en cada paso, por ubicación, pedimento y destino.
                 </p>
             </div>
-            <div class="flex items-center justify-between gap-6">
-                <p class="text-sm text-rail-muted">Todos los datos son ficticios.</p>
-                <div class="w-56"><SelectorTema /></div>
-            </div>
+            <p class="text-sm text-rail-muted">Todos los datos son ficticios.</p>
         </section>
 
         <section class="flex items-center justify-center px-5 py-12">

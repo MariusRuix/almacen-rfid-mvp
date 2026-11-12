@@ -114,17 +114,3 @@ withDefaults(defineProps<{ contador: number; esperado?: number; titulo?: string;
 }
 </style>
 
-<style>
-/* Tema Semáforo: luz ámbar mientras se lee (sin scoped para leer el atributo de <html>) */
-[data-tema='semaforo'] .barrido-rfid {
-    background: var(--surface);
-    border-color: var(--line);
-    color: var(--warn);
-}
-[data-tema='semaforo'] .barrido-rfid .haz {
-    background: linear-gradient(90deg, transparent, var(--luz-ambar), transparent);
-}
-[data-tema='semaforo'] .barrido-rfid .pista {
-    background: color-mix(in srgb, var(--luz-ambar) 18%, transparent);
-}
-</style>

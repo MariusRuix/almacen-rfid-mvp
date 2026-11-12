@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BarraCuadre from '@/Components/BarraCuadre.vue';
 import BarridoRfid from '@/Components/BarridoRfid.vue';
 import Chip from '@/Components/Chip.vue';
 import Girando from '@/Components/Girando.vue';
@@ -224,7 +225,7 @@ function ubicar(l: Linea) {
                         <th class="der">Leídas RFID</th>
                         <th class="der">Confirmadas</th>
                         <th class="der">Sin accesorio · dañadas</th>
-                        <th class="der">Diferencia</th>
+                        <th class="min-w-56">Cuadre <span class="font-normal text-ink-3">(confirmado contra esperado)</span></th>
                         <th>{{ cerrada ? 'Ubicación' : '' }}</th>
                     </tr>
                 </thead>
@@ -266,7 +267,9 @@ function ubicar(l: Linea) {
                             <span v-else-if="!l.danadas" class="text-ink-3">—</span>
                             <p v-if="l.danadas && lectura.visible(i)" class="text-xs font-semibold text-bad">{{ l.danadas }} dañadas</p>
                         </td>
-                        <td class="der font-semibold" :class="[l.diferencia === null ? 'text-ink-3' : l.diferencia === 0 ? 'text-ok' : 'text-bad', { 'celda-oculta': !lectura.visible(i) }]">{{ conSigno(l.diferencia) }}</td>
+                        <td>
+                            <BarraCuadre v-if="lectura.visible(i)" :esperado="l.esperadas" :contado="l.confirmadas" :cifras="false" />
+                        </td>
                         <td>
                             <div v-if="!cerrada" class="flex items-center gap-1">
                                 <button v-if="editarEsperado && cambioEsperado(l)" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" :disabled="!!ocupado" @click="guardarEsperado(l)"><Girando v-if="es(`esperado-${l.id}`)" />Guardar</button>
