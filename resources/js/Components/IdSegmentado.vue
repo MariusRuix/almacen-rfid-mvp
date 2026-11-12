@@ -49,7 +49,7 @@ const titulo = computed(() =>
 </script>
 
 <template>
-    <span v-if="segmentos.length" class="id" :class="[`id-${tam}`, `id-${tipo}`]" :title="titulo || undefined">
+    <span v-if="segmentos.length" class="id id-segmentado" :class="[`id-${tam}`, `id-${tipo}`]" :title="titulo || undefined">
         <template v-for="(s, i) in segmentos" :key="i">
             <span v-if="i > 0 && (tipo === 'sku' || tipo === 'ubicacion')" class="id-sep" aria-hidden="true">-</span>
             <span class="id-seg" :class="{ 'id-final': i === segmentos.length - 1 && segmentos.length > 1 && tipo !== 'sku' }">{{ s.texto }}</span>
@@ -98,7 +98,11 @@ const titulo = computed(() =>
 .id-ubicacion {
     gap: 0.08em;
 }
-:global([data-tema='semaforo']) .id-final {
+</style>
+
+<style>
+/* Tema Semáforo: recuadro discreto (sin scoped para poder leer el atributo de <html>) */
+[data-tema='semaforo'] .id-segmentado .id-final {
     border-width: 1px;
     border-color: var(--line-strong);
     background: var(--surface-2);
