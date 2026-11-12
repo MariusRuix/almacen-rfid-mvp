@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Girando from '@/Components/Girando.vue';
 import Chip from '@/Components/Chip.vue';
 import Encabezado from '@/Components/Encabezado.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
@@ -80,7 +81,7 @@ const origenHref = (i: Inc) => (i.origen_type === 'recepcion' ? `/recepciones/${
                                 <option v-for="u in ubicaciones" :key="u.id" :value="u.id">{{ u.codigo }}</option>
                             </select>
                         </div>
-                        <button type="submit" class="btn btn-primario" :disabled="form.processing">Marcar resuelta</button>
+                        <button type="submit" class="btn btn-primario" :disabled="form.processing"><Girando v-if="form.processing" />Marcar resuelta</button>
                     </form>
                 </li>
             </ul>

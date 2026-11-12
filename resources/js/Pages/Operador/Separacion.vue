@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Girando from '@/Components/Girando.vue';
 import Chip from '@/Components/Chip.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
 import Resultado from '@/Components/Resultado.vue';
@@ -107,7 +108,7 @@ function confirmar(d: DestinoPedido) {
 
             <div class="border-t border-line px-5 py-4">
                 <button type="button" class="btn btn-primario btn-grande w-full" :disabled="procesando" @click="confirmar(actual)">
-                    {{ actual.estado === 'pendiente' ? `${actual.codigo} listo` : `Actualizar ${actual.codigo}` }}
+                    <Girando v-if="procesando" />{{ actual.estado === 'pendiente' ? `${actual.codigo} listo` : `Actualizar ${actual.codigo}` }}
                 </button>
             </div>
         </article>

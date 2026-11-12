@@ -1,21 +1,33 @@
 <script setup lang="ts">
+import BarridoRfid from '@/Components/BarridoRfid.vue';
 import Chip from '@/Components/Chip.vue';
+import Girando from '@/Components/Girando.vue';
 import Encabezado from '@/Components/Encabezado.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
 import PreguntaAbierta from '@/Components/PreguntaAbierta.vue';
 import Resultado from '@/Components/Resultado.vue';
 import { useCompartido } from '@/composables/useCompartido';
+import { confirmar } from '@/composables/useConfirmar';
+import { useLectura } from '@/composables/useLectura';
+import { useOcupado } from '@/composables/useOcupado';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { estadosDestino, estadosPedido, estadosTarea } from '@/lib/etiquetas';
 import { conSigno, fecha, fechaYHora, n } from '@/lib/formato';
 import type { DestinoPedido, PedidoDetalle } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { Check, Circle, ExternalLink, Play, ScanLine, Truck, Wrench } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps<{ pedido: PedidoDetalle; regla: string }>();
 const { esResponsable } = useCompartido();
 const opciones = { preserveScroll: true };
+const { ocupado, con, es } = useOcupado();
+const lectura = useLectura();
+const leyendoId = ref<number | null>(null);
+const leyendo = (d: DestinoPedido) => leyendoId.value === d.id && lectura.fase.value !== 'inactivo';
+const filaVisible = (d: DestinoPedido, i: number) => leyendoId.value !== d.id || lectura.visible(i);
+const filaRecien = (d: DestinoPedido, i: number) => leyendoId.value === d.id && lectura.recien(i);
+const separadas = (d: DestinoPedido) => d.lineas.reduce((s, l) => s + (l.separada ?? 0), 0);
 
 const pasos = [
     { estado: 'nuevo', nombre: 'Recibido' },
@@ -38,31 +50,62 @@ function resultadoDestino(d: DestinoPedido) {
 const dif = (l: { leida: number | null; separada: number | null }) => (l.leida === null || l.separada === null ? null : l.leida - l.separada);
 
 function liberar() {
-    router.post(`/pedidos/${props.pedido.id}/liberar`, {}, opciones);
+    router.post(`/pedidos/${props.pedido.id}/liberar`, {}, { ...opciones, ...con('liberar') });
 }
 function marcar(d: DestinoPedido, campo: string, hecha: boolean) {
-    router.post(`/pedido-destinos/${d.id}/actividades`, { campo, hecha }, opciones);
+    router.post(`/pedido-destinos/${d.id}/actividades`, { campo, hecha }, { ...opciones, ...con(`marcar-${d.id}-${campo}`) });
 }
 const actividadesPendientes = computed(() =>
     props.pedido.destinos
         .map((d) => ({ codigo: d.codigo, faltan: d.actividades.filter((a) => !a.hecha).map((a) => a.etiqueta.toLowerCase()) }))
         .filter((d) => d.faltan.length),
 );
-function leer(d: DestinoPedido) {
-    router.post(`/pedido-destinos/${d.id}/leer`, {}, opciones);
+function leer(d: DestinoPedido, yaIniciada = false) {
+    if (!yaIniciada) {
+        leyendoId.value = d.id;
+        lectura.iniciar(separadas(d));
+    }
+    router.post(`/pedido-destinos/${d.id}/leer`, {}, {
+        ...opciones,
+        ...con(`leer-${d.id}`),
+        onSuccess: () => {
+            const actual = props.pedido.destinos.find((x) => x.id === d.id);
+            lectura.terminar(actual ? actual.lineas.reduce((s, l) => s + (l.leida ?? 0), 0) : 0, actual?.lineas.length ?? 0);
+        },
+        onError: lectura.cancelar,
+    });
 }
 function corregir(d: DestinoPedido) {
-    router.post(`/pedido-destinos/${d.id}/corregir`, {}, { ...opciones, onSuccess: () => leer(d) });
+    leyendoId.value = d.id;
+    lectura.iniciar(separadas(d));
+    router.post(`/pedido-destinos/${d.id}/corregir`, {}, { ...opciones, ...con(`leer-${d.id}`), onSuccess: () => leer(d, true), onError: lectura.cancelar });
 }
-function aceptar(d: DestinoPedido) {
-    if (window.confirm(`Se tomará lo leído como cantidad final de ${d.codigo} y la diferencia quedará como incidencia. ¿Continuar?`)) {
-        router.post(`/pedido-destinos/${d.id}/aceptar`, {}, opciones);
-    }
+async function aceptar(d: DestinoPedido) {
+    const difs = d.lineas
+        .filter((l) => dif(l))
+        .map((l) => `${l.producto.sku}: se separaron ${n(l.separada)}, se leyeron ${n(l.leida)} (${conSigno(dif(l))}).`);
+    const ok = await confirmar({
+        titulo: `¿Aceptar la lectura de ${d.codigo}?`,
+        mensaje: 'Lo leído queda como cantidad final de este destino.',
+        detalle: [...difs, `Se ${difs.length === 1 ? 'crea 1 incidencia' : `crean ${difs.length} incidencias`} para dar seguimiento.`],
+        aceptar: 'Aceptar lectura',
+    });
+    if (ok) router.post(`/pedido-destinos/${d.id}/aceptar`, {}, { ...opciones, ...con(`aceptar-${d.id}`) });
 }
 
 const salida = useForm({ transportista: 'Transportes del Bajío (ficticio)', placas: '', sello: '' });
-function despachar() {
-    salida.post(`/pedidos/${props.pedido.id}/despachar`, opciones);
+const piezasSalida = computed(() => props.pedido.destinos.reduce((s, d) => s + d.lineas.reduce((t, l) => t + (l.separada ?? 0), 0), 0));
+async function despachar() {
+    const ok = await confirmar({
+        titulo: `¿Autorizar la salida de ${props.pedido.folio}?`,
+        detalle: [
+            `${n(piezasSalida.value)} piezas en ${props.pedido.destinos.length} destinos salen del inventario.`,
+            `${salida.transportista} · placas ${salida.placas.toUpperCase()} · sello ${salida.sello.toUpperCase()}.`,
+            'Queda registrada en el historial y ya no se puede deshacer.',
+        ],
+        aceptar: 'Autorizar salida',
+    });
+    if (ok) salida.post(`/pedidos/${props.pedido.id}/despachar`, opciones);
 }
 </script>
 
@@ -77,7 +120,9 @@ function despachar() {
                 </p>
             </template>
             <Chip :valor="pedido.estado" :mapa="estadosPedido" />
-            <button v-if="pedido.estado === 'nuevo' && esResponsable" type="button" class="btn btn-primario" @click="liberar"><Play class="size-4" />Liberar a surtido</button>
+            <button v-if="pedido.estado === 'nuevo' && esResponsable" type="button" class="btn btn-primario" :disabled="!!ocupado" @click="liberar">
+                <Girando v-if="es('liberar')" /><Play v-else class="size-4" />{{ es('liberar') ? 'Generando instrucciones…' : 'Liberar a surtido' }}
+            </button>
             <Link v-if="['en_surtido'].includes(pedido.estado)" :href="`/operador/pedidos/${pedido.id}/surtido`" class="btn btn-secundario"><ExternalLink class="size-4" />Vista del operador</Link>
             <Link v-if="pedido.estado === 'en_separacion'" :href="`/operador/pedidos/${pedido.id}/separacion`" class="btn btn-secundario"><ExternalLink class="size-4" />Separar por destino</Link>
         </Encabezado>
@@ -145,7 +190,8 @@ function despachar() {
                             class="flex min-h-9 cursor-pointer items-center gap-2 rounded-ui border px-2.5 text-xs font-semibold"
                             :class="a.hecha ? 'border-transparent bg-ok-bg text-ok' : 'border-warn/40 bg-warn-bg text-warn'"
                         >
-                            <input type="checkbox" class="size-4 accent-[var(--ok)]" :checked="a.hecha" @change="marcar(d, a.campo, ($event.target as HTMLInputElement).checked)" />
+                            <Girando v-if="es(`marcar-${d.id}-${a.campo}`)" />
+                            <input v-else type="checkbox" class="size-4 accent-[var(--ok)]" :checked="a.hecha" :disabled="!!ocupado" @change="marcar(d, a.campo, ($event.target as HTMLInputElement).checked)" />
                             {{ a.etiqueta }}
                         </label>
                     </fieldset>
@@ -155,28 +201,35 @@ function despachar() {
                     <table class="tabla">
                         <thead><tr><th>SKU</th><th class="der">Pedido</th><th class="der">Separado</th><th class="der">Leído RFID</th><th class="der">Dif.</th></tr></thead>
                         <tbody>
-                            <tr v-for="l in d.lineas" :key="l.id" :class="{ 'bg-bad-bg/50': dif(l) }">
+                            <tr v-for="(l, i) in d.lineas" :key="l.id" :class="{ 'bg-bad-bg/50': dif(l) && filaVisible(d, i), 'fila-recien': filaRecien(d, i) }">
                                 <td><IdSegmentado :valor="l.producto.sku" tipo="sku" /></td>
                                 <td class="der">{{ n(l.cantidad) }}</td>
                                 <td class="der" :class="l.separada !== null && l.separada !== l.cantidad ? 'font-semibold text-warn' : ''">{{ n(l.separada) }}</td>
-                                <td class="der">{{ n(l.leida) }}</td>
-                                <td class="der font-semibold" :class="dif(l) === null ? 'text-ink-3' : dif(l) === 0 ? 'text-ok' : 'text-bad'">{{ conSigno(dif(l)) }}</td>
+                                <td class="der" :class="{ 'celda-oculta': !filaVisible(d, i) }">{{ n(l.leida) }}</td>
+                                <td class="der font-semibold" :class="[dif(l) === null ? 'text-ink-3' : dif(l) === 0 ? 'text-ok' : 'text-bad', { 'celda-oculta': !filaVisible(d, i) }]">{{ conSigno(dif(l)) }}</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
 
                 <div v-if="enRevision" class="mt-auto space-y-3 border-t border-line px-5 py-4">
-                    <Resultado :estado="resultadoDestino(d).estado" :titulo="resultadoDestino(d).titulo">
+                    <BarridoRfid v-if="leyendo(d)" :contador="lectura.contador.value" :esperado="separadas(d)" titulo="Leyendo el bulto" />
+                    <Resultado v-else :estado="resultadoDestino(d).estado" :titulo="resultadoDestino(d).titulo">
                         <template v-if="d.estado === 'verificado'">Verificado {{ fechaYHora(d.verificado_at) }}</template>
                         <template v-else-if="d.estado === 'con_diferencia'">Lo leído en el bulto no coincide con lo que se separó.</template>
                         <template v-else>Pasa el lector por el bulto de este destino.</template>
                     </Resultado>
                     <div class="flex flex-wrap gap-2">
-                        <button v-if="d.estado === 'separado'" type="button" class="btn btn-primario" @click="leer(d)"><ScanLine class="size-4" />Leer bulto</button>
-                        <template v-if="d.estado === 'con_diferencia'">
-                            <button type="button" class="btn btn-primario" @click="corregir(d)"><Wrench class="size-4" />Corregí el bulto, volver a leer</button>
-                            <button v-if="esResponsable" type="button" class="btn btn-secundario" @click="aceptar(d)">Aceptar lectura</button>
+                        <button v-if="d.estado === 'separado' && !leyendo(d)" type="button" class="btn btn-primario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="leer(d)">
+                            <ScanLine class="size-4" />Leer bulto
+                        </button>
+                        <template v-if="d.estado === 'con_diferencia' && !leyendo(d)">
+                            <button type="button" class="btn btn-primario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="corregir(d)">
+                                <Wrench class="size-4" />Corregí el bulto, volver a leer
+                            </button>
+                            <button v-if="esResponsable" type="button" class="btn btn-secundario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="aceptar(d)">
+                                <Girando v-if="es(`aceptar-${d.id}`)" />Aceptar lectura
+                            </button>
                         </template>
                     </div>
                 </div>
@@ -221,7 +274,9 @@ function despachar() {
                     <label for="sello" class="etiqueta">Sello</label>
                     <input id="sello" v-model="salida.sello" class="campo font-id uppercase placeholder:normal-case" placeholder="S-000000" required />
                 </div>
-                <button type="submit" class="btn btn-primario" :disabled="salida.processing || actividadesPendientes.length > 0"><Truck class="size-4" />Autorizar salida</button>
+                <button type="submit" class="btn btn-primario" :disabled="salida.processing || actividadesPendientes.length > 0">
+                    <Girando v-if="salida.processing" /><Truck v-else class="size-4" />{{ salida.processing ? 'Registrando salida…' : 'Autorizar salida' }}
+                </button>
             </form>
             <p v-else-if="!pedido.salida" class="px-5 py-5 text-ink-2">La responsable operativa autoriza la salida.</p>
         </section>

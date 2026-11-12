@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import BarridoRfid from '@/Components/BarridoRfid.vue';
 import Chip from '@/Components/Chip.vue';
+import Girando from '@/Components/Girando.vue';
 import Encabezado from '@/Components/Encabezado.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
 import PreguntaAbierta from '@/Components/PreguntaAbierta.vue';
 import Resultado from '@/Components/Resultado.vue';
 import { useCompartido } from '@/composables/useCompartido';
+import { confirmar } from '@/composables/useConfirmar';
+import { useLectura } from '@/composables/useLectura';
+import { useOcupado } from '@/composables/useOcupado';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { estadosRecepcion } from '@/lib/etiquetas';
 import { conSigno, fecha, fechaYHora, n } from '@/lib/formato';
@@ -70,10 +75,16 @@ const editarEsperado = computed(() => props.recepcion.estado === 'esperada' && e
 const enConteo = computed(() => props.recepcion.estado === 'en_conteo');
 const cambioEsperado = (l: Linea) => esperado[l.id].cajas !== l.cajas || esperado[l.id].piezas_por_caja !== l.piezas_por_caja;
 function guardarEsperado(l: Linea) {
-    router.put(`/recepcion-lineas/${l.id}/esperado`, esperado[l.id], opciones);
+    router.put(`/recepcion-lineas/${l.id}/esperado`, esperado[l.id], { ...opciones, ...con(`esperado-${l.id}`) });
 }
-function quitar(l: Linea) {
-    if (window.confirm(`¿Quitar ${l.producto.sku} de la recepción?`)) router.delete(`/recepcion-lineas/${l.id}`, opciones);
+async function quitar(l: Linea) {
+    const ok = await confirmar({
+        titulo: `¿Quitar ${l.producto.sku} de la recepción?`,
+        mensaje: l.no_esperado ? 'Se borra el registro de este SKU no esperado.' : `Deja de esperarse: ${n(l.esperadas)} piezas.`,
+        aceptar: 'Quitar',
+        tono: 'peligro',
+    });
+    if (ok) router.delete(`/recepcion-lineas/${l.id}`, { ...opciones, ...con(`quitar-${l.id}`) });
 }
 const nuevo = reactive({ sku: '', cajas: null as number | null, piezas_por_caja: null as number | null, piezas: null as number | null });
 const errores = ref<Record<string, string>>({});
@@ -93,6 +104,7 @@ function agregar() {
         : { producto_id: productoNuevo.value.id, cajas: nuevo.cajas, piezas_por_caja: nuevo.piezas_por_caja };
     router.post(`/recepciones/${props.recepcion.id}/lineas`, datos, {
         ...opciones,
+        ...con('agregar'),
         onError: (e) => (errores.value = e),
         onSuccess: () => {
             errores.value = {};
@@ -104,23 +116,40 @@ function agregar() {
 const porUbicar = computed(() => props.recepcion.lineas.filter((l) => !l.ubicada).length);
 const libre = (u: { capacidad: number; ocupadas: number }) => u.capacidad - u.ocupadas;
 const opciones = { preserveScroll: true };
+const { ocupado, con, es } = useOcupado();
+const lectura = useLectura();
+const piezasEnSitio = () => props.recepcion.lineas.reduce((s, l) => s + (l.esperadas > 0 ? l.esperadas : (l.confirmadas ?? 0)), 0);
+const leidasTotal = () => props.recepcion.lineas.reduce((s, l) => s + (l.leidas ?? 0), 0);
 
-function leer() {
-    router.post(`/recepciones/${props.recepcion.id}/leer`, {}, opciones);
+function leer(yaIniciada = false) {
+    if (!yaIniciada) lectura.iniciar(piezasEnSitio());
+    router.post(`/recepciones/${props.recepcion.id}/leer`, {}, {
+        ...opciones,
+        ...con('leer'),
+        onSuccess: () => lectura.terminar(leidasTotal(), props.recepcion.lineas.length),
+        onError: lectura.cancelar,
+    });
 }
 function releer() {
-    router.post(`/recepciones/${props.recepcion.id}/releer`, {}, { ...opciones, onSuccess: leer });
+    lectura.iniciar(piezasEnSitio());
+    router.post(`/recepciones/${props.recepcion.id}/releer`, {}, { ...opciones, ...con('leer'), onSuccess: () => leer(true), onError: lectura.cancelar });
 }
 function guardar(l: Linea) {
-    router.put(`/recepcion-lineas/${l.id}`, edicion[l.id], opciones);
+    router.put(`/recepcion-lineas/${l.id}`, edicion[l.id], { ...opciones, ...con(`guardar-${l.id}`) });
 }
-function cerrar() {
-    if (window.confirm('Al cerrar, lo confirmado entra al inventario y las diferencias quedan como incidencias. ¿Cerrar recepción?')) {
-        router.post(`/recepciones/${props.recepcion.id}/cerrar`, {}, opciones);
-    }
+async function cerrar() {
+    const t = totales.value;
+    const buenas = t.confirmadas - t.sinAccesorio;
+    const incidencias = props.recepcion.lineas.filter((l) => l.diferencia).length + props.recepcion.lineas.filter((l) => l.sin_accesorio).length;
+    const detalle = [`${n(buenas)} piezas entran al inventario en ${props.zonaRecepcion}, listas para ubicarse.`];
+    if (t.sinAccesorio) detalle.push(`${n(t.sinAccesorio)} piezas sin accesorio se apartan como incidencia.`);
+    detalle.push(incidencias ? `Se ${incidencias === 1 ? 'creará 1 incidencia' : `crearán ${incidencias} incidencias`} por las diferencias.` : 'Todo cuadra: no se crearán incidencias.');
+    detalle.push('Después de cerrar ya no se puede cambiar el conteo.');
+    const ok = await confirmar({ titulo: `¿Cerrar la recepción ${props.recepcion.folio}?`, detalle, aceptar: 'Cerrar recepción' });
+    if (ok) router.post(`/recepciones/${props.recepcion.id}/cerrar`, {}, { ...opciones, ...con('cerrar') });
 }
 function ubicar(l: Linea) {
-    router.post(`/recepcion-lineas/${l.id}/ubicar`, { ubicacion_id: destino[l.id] }, opciones);
+    router.post(`/recepcion-lineas/${l.id}/ubicar`, { ubicacion_id: destino[l.id] }, { ...opciones, ...con(`ubicar-${l.id}`) });
 }
 </script>
 
@@ -139,13 +168,20 @@ function ubicar(l: Linea) {
                 </dl>
             </template>
             <template v-if="!cerrada">
-                <button v-if="leida" type="button" class="btn btn-secundario" title="Simula que se corrigió el conteo físico y se vuelve a pasar el lector" @click="releer"><RotateCcw class="size-4" />Volver a leer</button>
-                <button v-else type="button" class="btn btn-primario" @click="leer"><ScanLine class="size-4" />Leer RFID</button>
-                <button v-if="esResponsable && leida" type="button" class="btn btn-primario" @click="cerrar"><Lock class="size-4" />Cerrar recepción</button>
+                <button v-if="leida" type="button" class="btn btn-secundario" title="Simula que se corrigió el conteo físico y se vuelve a pasar el lector" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="releer">
+                    <Girando v-if="es('leer')" /><RotateCcw v-else class="size-4" />Volver a leer
+                </button>
+                <button v-else type="button" class="btn btn-primario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="leer()">
+                    <Girando v-if="es('leer')" /><ScanLine v-else class="size-4" />{{ es('leer') ? 'Leyendo…' : 'Leer RFID' }}
+                </button>
+                <button v-if="esResponsable && leida" type="button" class="btn btn-primario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="cerrar">
+                    <Girando v-if="es('cerrar')" /><Lock v-else class="size-4" />{{ es('cerrar') ? 'Cerrando…' : 'Cerrar recepción' }}
+                </button>
             </template>
         </Encabezado>
 
-        <Resultado :estado="resultado.estado" :titulo="resultado.titulo" grande class="mb-5">
+        <BarridoRfid v-if="lectura.fase.value !== 'inactivo'" :contador="lectura.contador.value" :esperado="piezasEnSitio()" grande class="mb-5" />
+        <Resultado v-else :estado="resultado.estado" :titulo="resultado.titulo" grande class="mb-5">
             <template v-if="leida">
                 Esperadas <b class="num">{{ n(totales.esperadas) }}</b> · confirmadas <b class="num">{{ n(totales.confirmadas) }}</b> ·
                 diferencia <b class="num">{{ conSigno(totales.diferencia) }}</b>
@@ -178,7 +214,11 @@ function ubicar(l: Linea) {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="l in recepcion.lineas" :key="l.id" :class="{ 'bg-bad-bg/50': l.diferencia }">
+                    <tr
+                        v-for="(l, i) in recepcion.lineas"
+                        :key="l.id"
+                        :class="{ 'bg-bad-bg/50': l.diferencia && lectura.visible(i), 'fila-recien': lectura.recien(i) }"
+                    >
                         <td>
                             <IdSegmentado :valor="l.producto.sku" tipo="sku" />
                             <span v-if="l.no_esperado" class="ml-2 rounded bg-warn-bg px-1.5 py-0.5 text-xs font-semibold text-warn">No esperado</span>
@@ -194,24 +234,26 @@ function ubicar(l: Linea) {
                             <template v-else>{{ l.cajas }} × {{ l.piezas_por_caja }}</template>
                         </td>
                         <td class="der">{{ n(l.esperadas) }}</td>
-                        <td class="der">{{ n(l.leidas) }}</td>
+                        <td class="der" :class="{ 'celda-oculta': !lectura.visible(i) }">{{ n(l.leidas) }}</td>
                         <td class="der">
-                            <input v-if="!cerrada && leida" v-model.number="edicion[l.id].confirmadas" type="number" min="0" class="campo num w-24 text-right" :aria-label="`Confirmadas ${l.producto.sku}`" />
+                            <span v-if="!lectura.visible(i)" />
+                            <input v-else-if="!cerrada && leida" v-model.number="edicion[l.id].confirmadas" type="number" min="0" class="campo num w-24 text-right" :aria-label="`Confirmadas ${l.producto.sku}`" />
                             <span v-else class="font-semibold">{{ n(l.confirmadas) }}</span>
                         </td>
                         <td class="der">
-                            <template v-if="l.producto.accesorio">
+                            <span v-if="!lectura.visible(i)" />
+                            <template v-else-if="l.producto.accesorio">
                                 <input v-if="!cerrada && leida" v-model.number="edicion[l.id].sin_accesorio" type="number" min="0" class="campo num w-20 text-right" :aria-label="`Sin ${l.producto.accesorio}`" :title="`Piezas sin ${l.producto.accesorio}`" />
                                 <span v-else :class="l.sin_accesorio ? 'font-semibold text-warn' : 'text-ink-3'">{{ l.sin_accesorio }}</span>
                                 <p class="text-xs text-ink-3">{{ l.producto.accesorio }}</p>
                             </template>
                             <span v-else class="text-ink-3">—</span>
                         </td>
-                        <td class="der font-semibold" :class="l.diferencia === null ? 'text-ink-3' : l.diferencia === 0 ? 'text-ok' : 'text-bad'">{{ conSigno(l.diferencia) }}</td>
+                        <td class="der font-semibold" :class="[l.diferencia === null ? 'text-ink-3' : l.diferencia === 0 ? 'text-ok' : 'text-bad', { 'celda-oculta': !lectura.visible(i) }]">{{ conSigno(l.diferencia) }}</td>
                         <td>
                             <div v-if="!cerrada" class="flex items-center gap-1">
-                                <button v-if="editarEsperado && cambioEsperado(l)" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" @click="guardarEsperado(l)">Guardar</button>
-                                <button v-else-if="leida && cambiada(l)" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" @click="guardar(l)">Guardar</button>
+                                <button v-if="editarEsperado && cambioEsperado(l)" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" :disabled="!!ocupado" @click="guardarEsperado(l)"><Girando v-if="es(`esperado-${l.id}`)" />Guardar</button>
+                                <button v-else-if="leida && cambiada(l) && lectura.fase.value === 'inactivo'" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" :disabled="!!ocupado" @click="guardar(l)"><Girando v-if="es(`guardar-${l.id}`)" />Guardar</button>
                                 <button
                                     v-if="esResponsable && (editarEsperado || (enConteo && l.no_esperado))"
                                     type="button"
@@ -220,7 +262,7 @@ function ubicar(l: Linea) {
                                     title="Quitar de la recepción"
                                     @click="quitar(l)"
                                 >
-                                    <Trash2 class="size-4" />
+                                    <Girando v-if="es(`quitar-${l.id}`)" /><Trash2 v-else class="size-4" />
                                 </button>
                             </div>
                             <template v-else>
@@ -232,7 +274,7 @@ function ubicar(l: Linea) {
                                             {{ u.codigo }} · {{ n(libre(u)) }} libres{{ u.id === l.sugerida?.id ? ' · sugerida' : '' }}
                                         </option>
                                     </select>
-                                    <button type="button" class="btn btn-primario min-h-9 px-3 text-sm" :disabled="!destino[l.id]" @click="ubicar(l)">Ubicar</button>
+                                    <button type="button" class="btn btn-primario min-h-9 px-3 text-sm" :disabled="!destino[l.id] || !!ocupado" @click="ubicar(l)"><Girando v-if="es(`ubicar-${l.id}`)" />Ubicar</button>
                                 </div>
                             </template>
                         </td>
@@ -268,7 +310,7 @@ function ubicar(l: Linea) {
                         <input id="nuevo-ppc" v-model.number="nuevo.piezas_por_caja" type="number" min="1" class="campo num w-24 text-right" />
                     </div>
                 </template>
-                <button type="submit" class="btn btn-secundario" :disabled="!puedeAgregar"><PackagePlus class="size-4" />{{ enConteo ? 'Registrar no esperado' : 'Agregar' }}</button>
+                <button type="submit" class="btn btn-secundario" :disabled="!puedeAgregar || !!ocupado"><Girando v-if="es('agregar')" /><PackagePlus v-else class="size-4" />{{ enConteo ? 'Registrar no esperado' : 'Agregar' }}</button>
                 <p v-if="enConteo" class="w-full text-xs text-ink-3">Queda con esperado 0: al cerrar la recepción se registra como sobrante.</p>
             </form>
         </section>

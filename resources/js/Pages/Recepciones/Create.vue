@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Girando from '@/Components/Girando.vue';
 import Encabezado from '@/Components/Encabezado.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
@@ -204,6 +205,7 @@ function guardar() {
             <div class="flex flex-wrap items-center justify-end gap-3">
                 <Link href="/recepciones" class="btn btn-secundario">Cancelar</Link>
                 <button type="submit" class="btn btn-primario" :disabled="!listo || form.processing">
+                    <Girando v-if="form.processing" />
                     {{ form.processing ? 'Guardando…' : `Crear recepción · ${n(totales.piezas)} piezas` }}
                 </button>
             </div>

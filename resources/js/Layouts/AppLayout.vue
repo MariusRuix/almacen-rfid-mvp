@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import DialogoConfirmacion from '@/Components/DialogoConfirmacion.vue';
 import Flash from '@/Components/Flash.vue';
 import SelectorTema from '@/Components/SelectorTema.vue';
 import { useCompartido } from '@/composables/useCompartido';
+import { confirmar } from '@/composables/useConfirmar';
 import { Link, router } from '@inertiajs/vue3';
 import {
     ArrowDownToLine,
@@ -70,10 +72,18 @@ function activo(href: string, exacto?: boolean) {
     return exacto ? ruta === href : ruta === href || ruta.startsWith(href + '/');
 }
 
-function reiniciar() {
-    if (window.confirm('Se borrarán los cambios y se cargarán de nuevo los datos ficticios. ¿Continuar?')) {
-        router.post('/demo/reiniciar');
-    }
+async function reiniciar() {
+    const ok = await confirmar({
+        titulo: '¿Reiniciar la demo?',
+        detalle: [
+            'Se borran las recepciones, pedidos, salidas e incidencias capturadas.',
+            'Se cargan otra vez los datos ficticios de origen (REC-0001, PED-0001, PED-0002).',
+            'Las sesiones siguen abiertas.',
+        ],
+        aceptar: 'Reiniciar demo',
+        tono: 'peligro',
+    });
+    if (ok) router.post('/demo/reiniciar');
 }
 </script>
 
@@ -154,5 +164,6 @@ function reiniciar() {
             </div>
         </main>
         <Flash />
+        <DialogoConfirmacion />
     </div>
 </template>

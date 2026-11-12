@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Girando from '@/Components/Girando.vue';
 import SelectorTema from '@/Components/SelectorTema.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ScanLine } from 'lucide-vue-next';
@@ -53,6 +54,7 @@ function entrar() {
                         <input id="password" v-model="form.password" type="password" class="campo" autocomplete="current-password" required />
                     </div>
                     <button type="submit" class="btn btn-primario w-full" :disabled="form.processing">
+                        <Girando v-if="form.processing" />
                         {{ form.processing ? 'Entrando…' : 'Entrar' }}
                     </button>
                 </form>

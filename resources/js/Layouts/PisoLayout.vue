@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DialogoConfirmacion from '@/Components/DialogoConfirmacion.vue';
 import Flash from '@/Components/Flash.vue';
 import { useCompartido } from '@/composables/useCompartido';
 import { Link } from '@inertiajs/vue3';
@@ -27,5 +28,6 @@ const { usuario, esResponsable } = useCompartido();
             <slot />
         </main>
         <Flash />
+        <DialogoConfirmacion />
     </div>
 </template>

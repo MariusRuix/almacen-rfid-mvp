@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Girando from '@/Components/Girando.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
 import Resultado from '@/Components/Resultado.vue';
 import PisoLayout from '@/Layouts/PisoLayout.vue';
@@ -88,7 +89,7 @@ const ajustar = (d: number) => (form.tomada = Math.max(0, Math.min(props.tarea?.
 
             <div class="mt-5 grid gap-3">
                 <button type="button" class="btn btn-primario btn-grande w-full" :disabled="form.processing" @click="confirmar">
-                    {{ faltan ? `Confirmar ${form.tomada} piezas` : `Tomé ${n(tarea.cantidad)} piezas` }}
+                    <Girando v-if="form.processing" />{{ faltan ? `Confirmar ${form.tomada} piezas` : `Tomé ${n(tarea.cantidad)} piezas` }}
                 </button>
                 <button type="button" class="btn btn-secundario btn-grande w-full" @click="faltan = !faltan">
                     {{ faltan ? 'Sí están completas' : 'No están completas' }}

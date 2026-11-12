@@ -288,3 +288,26 @@
         font-variant-numeric: tabular-nums;
     }
 }
+
+/* Fila que acaba de llenarse con una lectura RFID */
+@layer components {
+    .fila-recien td {
+        animation: fila-recien 900ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .celda-oculta {
+        color: transparent !important;
+    }
+}
+@keyframes fila-recien {
+    from {
+        background-color: color-mix(in srgb, var(--info) 20%, transparent);
+    }
+    to {
+        background-color: transparent;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .fila-recien td {
+        animation: none;
+    }
+}

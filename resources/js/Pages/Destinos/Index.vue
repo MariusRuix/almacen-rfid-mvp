@@ -2,8 +2,10 @@
 import Encabezado from '@/Components/Encabezado.vue';
 import Vacio from '@/Components/Vacio.vue';
 import { useCompartido } from '@/composables/useCompartido';
+import { confirmar } from '@/composables/useConfirmar';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import Girando from '@/Components/Girando.vue';
 import { Check, Pencil, Plus, Trash2 } from 'lucide-vue-next';
 import { nextTick, ref } from 'vue';
 
@@ -47,11 +49,11 @@ function guardar() {
     if (editando.value) form.put(`/destinos/${editando.value.id}`, opciones);
     else form.post('/destinos', opciones);
 }
-function borrar(d: Destino) {
-    if (window.confirm(`¿Borrar el destino ${d.codigo} · ${d.nombre}?`)) {
-        router.delete(`/destinos/${d.id}`, { preserveScroll: true });
-    }
+async function borrar(d: Destino) {
+    const ok = await confirmar({ titulo: `¿Borrar el destino ${d.codigo}?`, mensaje: `${d.nombre} deja de estar disponible para nuevos pedidos.`, aceptar: 'Borrar destino', tono: 'peligro' });
+    if (ok) router.delete(`/destinos/${d.id}`, { preserveScroll: true, onStart: () => (borrando.value = d.id), onFinish: () => (borrando.value = null) });
 }
+const borrando = ref<number | null>(null);
 // Un almacén normalmente no lleva etiqueta comercial; se propone al cambiar el tipo.
 function cambiarTipo() {
     if (form.tipo === 'almacen') form.requiere_etiqueta_comercial = false;
@@ -108,7 +110,7 @@ function cambiarTipo() {
 
             <div class="mt-5 flex flex-wrap justify-end gap-3">
                 <button type="button" class="btn btn-secundario" @click="cerrar">Cancelar</button>
-                <button type="submit" class="btn btn-primario" :disabled="form.processing">{{ editando ? 'Guardar cambios' : 'Crear destino' }}</button>
+                <button type="submit" class="btn btn-primario" :disabled="form.processing"><Girando v-if="form.processing" />{{ editando ? 'Guardar cambios' : 'Crear destino' }}</button>
             </div>
         </form>
 
@@ -148,7 +150,7 @@ function cambiarTipo() {
                                 :title="d.pedidos > 0 ? 'Tiene pedidos: no se puede borrar' : 'Borrar'"
                                 @click="borrar(d)"
                             >
-                                <Trash2 class="size-4" />
+                                <Girando v-if="borrando === d.id" /><Trash2 v-else class="size-4" />
                             </button>
                         </td>
                     </tr>

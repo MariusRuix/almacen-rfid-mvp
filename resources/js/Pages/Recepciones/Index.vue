@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Girando from '@/Components/Girando.vue';
 import Chip from '@/Components/Chip.vue';
 import Encabezado from '@/Components/Encabezado.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
@@ -62,7 +63,7 @@ function importar() {
                 <label class="etiqueta" for="fecha">Llega</label>
                 <input id="fecha" v-model="form.fecha_esperada" type="date" class="campo" required />
             </div>
-            <button type="submit" class="btn btn-primario" :disabled="form.processing">Crear recepción</button>
+            <button type="submit" class="btn btn-primario" :disabled="form.processing"><Girando v-if="form.processing" />Crear recepción</button>
         </form>
 
         <section class="panel overflow-x-auto">

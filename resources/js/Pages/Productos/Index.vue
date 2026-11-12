@@ -2,7 +2,9 @@
 import Encabezado from '@/Components/Encabezado.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
 import Vacio from '@/Components/Vacio.vue';
+import Girando from '@/Components/Girando.vue';
 import { useCompartido } from '@/composables/useCompartido';
+import { confirmar } from '@/composables/useConfirmar';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { n } from '@/lib/formato';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
@@ -59,8 +61,10 @@ function guardar() {
     if (editando.value) form.put(`/productos/${editando.value.id}`, opciones);
     else form.post('/productos', opciones);
 }
-function borrar(p: Producto) {
-    if (window.confirm(`¿Borrar el producto ${p.sku}?`)) router.delete(`/productos/${p.id}`, { preserveScroll: true });
+const borrando = ref<number | null>(null);
+async function borrar(p: Producto) {
+    const ok = await confirmar({ titulo: `¿Borrar el producto ${p.sku}?`, mensaje: `${p.descripcion} deja de estar en el catálogo.`, aceptar: 'Borrar producto', tono: 'peligro' });
+    if (ok) router.delete(`/productos/${p.id}`, { preserveScroll: true, onStart: () => (borrando.value = p.id), onFinish: () => (borrando.value = null) });
 }
 </script>
 
@@ -109,7 +113,7 @@ function borrar(p: Producto) {
             <p v-if="editando" class="mt-4 text-sm text-ink-2">Prefijo RFID: <span class="font-id">{{ editando.epc_prefijo }}</span> (asignado por el sistema)</p>
             <div class="mt-5 flex flex-wrap justify-end gap-3">
                 <button type="button" class="btn btn-secundario" @click="cerrar">Cancelar</button>
-                <button type="submit" class="btn btn-primario" :disabled="form.processing">{{ editando ? 'Guardar cambios' : 'Crear producto' }}</button>
+                <button type="submit" class="btn btn-primario" :disabled="form.processing"><Girando v-if="form.processing" />{{ editando ? 'Guardar cambios' : 'Crear producto' }}</button>
             </div>
         </form>
 
@@ -157,7 +161,7 @@ function borrar(p: Producto) {
                                 :title="p.en_uso ? 'Ya tiene recepciones, pedidos o movimientos: no se puede borrar' : 'Borrar'"
                                 @click="borrar(p)"
                             >
-                                <Trash2 class="size-4" />
+                                <Girando v-if="borrando === p.id" /><Trash2 v-else class="size-4" />
                             </button>
                         </td>
                     </tr>
