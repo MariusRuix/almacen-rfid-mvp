@@ -40,7 +40,7 @@ class PedidoController extends Controller
     /** Captura manual: matriz de SKU por destino, como el reparto que prepara la responsable. */
     public function create(): Response
     {
-        $surtibles = Ubicacion::whereIn('zona', ['rack', 'adicional'])->pluck('id');
+        $surtibles = Ubicacion::whereIn('zona', Ubicacion::ALMACENAJE)->pluck('id');
         $disponible = Existencia::where('estado', 'disponible')->whereIn('ubicacion_id', $surtibles)
             ->selectRaw('producto_id, sum(cantidad) as piezas')->groupBy('producto_id')->pluck('piezas', 'producto_id');
 
@@ -167,7 +167,7 @@ class PedidoController extends Controller
         abort_if($pedido->estado !== 'nuevo', 422);
         $pedido->load('lineas.producto');
         $necesidad = $pedido->lineas->groupBy('producto_id')->map->sum('cantidad');
-        $zonasSurtibles = Ubicacion::whereIn('zona', ['rack', 'adicional'])->pluck('id');
+        $zonasSurtibles = Ubicacion::whereIn('zona', Ubicacion::ALMACENAJE)->pluck('id');
 
         $tareas = [];
         foreach ($necesidad as $productoId => $faltan) {

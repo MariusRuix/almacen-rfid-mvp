@@ -86,7 +86,7 @@ class RecepcionController extends Controller
                     'no_esperado' => $l->piezas_esperadas === 0,
                 ]),
             ],
-            'ubicaciones' => Ubicacion::whereIn('zona', ['rack', 'adicional'])->where('activa', true)->orderBy('codigo')->get()
+            'ubicaciones' => Ubicacion::whereIn('zona', Ubicacion::ALMACENAJE)->where('activa', true)->orderBy('codigo')->get()
                 ->map(fn ($u) => [
                     'id' => $u->id, 'codigo' => $u->codigo, 'zona' => $u->zona, 'capacidad' => $u->capacidad,
                     'ocupadas' => (int) Existencia::where('ubicacion_id', $u->id)->sum('cantidad'),
@@ -464,7 +464,7 @@ class RecepcionController extends Controller
     private function sugerirUbicacion(RecepcionLinea $l): ?Ubicacion
     {
         $necesita = $l->piezas_confirmadas - $l->piezas_sin_accesorio - $l->piezas_danadas;
-        $candidatas = Ubicacion::whereIn('zona', ['rack', 'adicional'])->where('activa', true)->orderBy('codigo')->get()
+        $candidatas = Ubicacion::whereIn('zona', Ubicacion::ALMACENAJE)->where('activa', true)->orderBy('codigo')->get()
             ->map(fn ($u) => [$u, (int) Existencia::where('ubicacion_id', $u->id)->sum('cantidad'),
                 Existencia::where('ubicacion_id', $u->id)->where('producto_id', $l->producto_id)->exists()]);
 

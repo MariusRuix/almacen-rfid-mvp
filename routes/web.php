@@ -12,6 +12,7 @@ use App\Http\Controllers\PedidoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\RecepcionController;
 use App\Http\Controllers\TableroController;
+use App\Http\Controllers\UbicacionController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -44,6 +45,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventario', [InventarioController::class, 'index']);
     Route::get('/inventario/mapa', [InventarioController::class, 'mapa']);
     Route::get('/movimientos', [MovimientoController::class, 'index']);
+    Route::post('/ubicaciones/pasillo', [UbicacionController::class, 'generarPasillo'])->middleware('rol:responsable');
+    Route::post('/ubicaciones', [UbicacionController::class, 'store'])->middleware('rol:responsable');
+    Route::put('/ubicaciones/{ubicacion}', [UbicacionController::class, 'update'])->middleware('rol:responsable');
+    Route::delete('/ubicaciones/{ubicacion}', [UbicacionController::class, 'destroy'])->middleware('rol:responsable');
+    Route::post('/ubicaciones/reubicar', [UbicacionController::class, 'reubicar']);
 
     // Pedidos, revisión y salida
     Route::get('/pedidos', [PedidoController::class, 'index']);

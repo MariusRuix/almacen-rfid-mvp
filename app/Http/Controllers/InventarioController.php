@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Existencia;
+use App\Models\Movimiento;
 use App\Models\Pedimento;
 use App\Models\Ubicacion;
 use Illuminate\Http\Request;
@@ -64,15 +65,40 @@ class InventarioController extends Controller
 
     public function mapa(): Response
     {
-        $ocupacion = Existencia::selectRaw('ubicacion_id, sum(cantidad) as piezas, count(distinct pedimento_id) as pedimentos')
-            ->groupBy('ubicacion_id')->get()->keyBy('ubicacion_id');
+        $existencias = Existencia::with(['producto', 'pedimento'])->where('cantidad', '>', 0)->get();
+        $porUbicacion = $existencias->groupBy('ubicacion_id');
+        $conHistorial = Movimiento::pluck('ubicacion_origen_id')->merge(Movimiento::pluck('ubicacion_destino_id'))->filter()->unique()->flip();
+
+        // Últimos movimientos de cada ubicación (para el panel lateral)
+        $recientes = Movimiento::with(['producto', 'usuario', 'origen', 'destino'])->latest('id')->take(400)->get();
 
         return Inertia::render('Inventario/Mapa', [
-            'ubicaciones' => Ubicacion::orderBy('codigo')->get()->map(fn ($u) => [
-                'id' => $u->id, 'codigo' => $u->codigo, 'zona' => $u->zona, 'capacidad' => $u->capacidad,
-                'piezas' => (int) ($ocupacion[$u->id]->piezas ?? 0),
-                'pedimentos' => (int) ($ocupacion[$u->id]->pedimentos ?? 0),
-            ]),
+            'ubicaciones' => Ubicacion::orderBy('codigo')->get()->map(function ($u) use ($porUbicacion, $conHistorial, $recientes) {
+                $filas = $porUbicacion[$u->id] ?? collect();
+
+                return [
+                    'id' => $u->id,
+                    'codigo' => $u->codigo,
+                    'zona' => $u->zona,
+                    'capacidad' => $u->capacidad,
+                    'activa' => $u->activa,
+                    'piezas' => (int) $filas->sum('cantidad'),
+                    'pedimentos' => $filas->pluck('pedimento_id')->unique()->count(),
+                    'incidencia' => $filas->contains('estado', 'incidencia'),
+                    'usada' => isset($conHistorial[$u->id]) || $filas->isNotEmpty(),
+                    'contenido' => $filas->sortBy('producto.sku')->values()->map(fn ($e) => [
+                        'existencia_id' => $e->id,
+                        'sku' => $e->producto->sku,
+                        'descripcion' => $e->producto->descripcion,
+                        'pedimento' => $e->pedimento->numero,
+                        'fecha_pago' => $e->pedimento->fecha_pago->toDateString(),
+                        'estado' => $e->estado,
+                        'cantidad' => $e->cantidad,
+                    ]),
+                    'movimientos' => $recientes->filter(fn ($m) => $m->ubicacion_origen_id === $u->id || $m->ubicacion_destino_id === $u->id)
+                        ->take(5)->values()->map(fn ($m) => MovimientoController::fila($m)),
+                ];
+            }),
         ]);
     }
 }

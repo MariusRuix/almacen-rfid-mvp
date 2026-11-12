@@ -58,10 +58,13 @@ export const tiposMovimiento: Record<string, string> = {
     incidencia: 'Incidencia',
     liberacion: 'Liberación',
     salida: 'Salida',
+    reubicacion: 'Reubicación',
 };
 
 export const zonas: Record<string, string> = {
     rack: 'Rack',
+    estanteria: 'Estantería',
+    piso: 'Piso',
     adicional: 'Adicional',
     recepcion: 'Recepción',
     preparacion: 'Preparación',

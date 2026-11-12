@@ -37,7 +37,7 @@ class IncidenciaController extends Controller
                     'fecha' => $i->created_at->toDateTimeString(),
                     'puede_liberar' => $i->tipo === 'accesorio_faltante' && $i->estado === 'abierta',
                 ]),
-            'ubicaciones' => Ubicacion::whereIn('zona', ['rack', 'adicional'])->orderBy('codigo')->get(['id', 'codigo']),
+            'ubicaciones' => Ubicacion::whereIn('zona', Ubicacion::ALMACENAJE)->orderBy('codigo')->get(['id', 'codigo']),
         ]);
     }
 
