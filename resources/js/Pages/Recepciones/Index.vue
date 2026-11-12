@@ -56,7 +56,7 @@ function importar() {
             </div>
             <div>
                 <label class="etiqueta" for="contenedor">Contenedor</label>
-                <input id="contenedor" v-model="form.contenedor" class="campo font-id" placeholder="TXAU1234567" />
+                <input id="contenedor" v-model="form.contenedor" class="campo font-id" placeholder="TXAU1234562" />
             </div>
             <div>
                 <label class="etiqueta" for="fecha">Llega</label>

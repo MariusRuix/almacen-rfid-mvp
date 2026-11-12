@@ -406,7 +406,7 @@ class RecepcionController extends Controller
         return [
             'pedimento.required' => 'Captura el número de pedimento.',
             'pedimento.regex' => 'El pedimento lleva 15 dígitos: año, aduana, patente y número.',
-            'contenedor.regex' => 'El contenedor lleva 4 letras y 7 dígitos, por ejemplo TXAU1047728.',
+            'contenedor.regex' => 'El contenedor lleva 4 letras y 7 dígitos, por ejemplo TXAU1047725.',
             'fecha_esperada.required' => 'Indica cuándo llega.',
         ];
     }
