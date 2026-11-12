@@ -164,6 +164,11 @@ async function despachar() {
         <!-- Avance del pedido -->
         <section class="panel mb-6 px-5 pt-5 pb-4">
             <AvancePedido :avance="avance" />
+            <p v-if="pedido.estado === 'nuevo'" class="mt-4 rounded-ui bg-surface-2 px-4 py-3 text-sm text-ink-2">
+                <b class="text-ink">El pedido está registrado, pero todavía no llega a piso.</b>
+                {{ esResponsable ? 'Al liberarlo' : 'Cuando la responsable lo libere' }}, el sistema asigna de qué ubicación y pedimento sale cada pieza y genera las
+                instrucciones de toma para el operador. Mientras tanto se puede revisar sin que nadie haya tomado nada.
+            </p>
         </section>
 
         <!-- Instrucciones de toma -->

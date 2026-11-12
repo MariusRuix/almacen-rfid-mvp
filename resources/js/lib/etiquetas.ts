@@ -10,7 +10,7 @@ export const estadosRecepcion: Mapa = {
 };
 
 export const estadosPedido: Mapa = {
-    nuevo: ['Nuevo', 'neutro'],
+    nuevo: ['Registrado · por liberar', 'neutro'],
     en_surtido: ['En surtido', 'info'],
     en_separacion: ['Separando por destino', 'info'],
     en_revision: ['En revisión', 'warn'],

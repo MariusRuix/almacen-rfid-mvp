@@ -30,8 +30,12 @@ const pasos = computed(() => {
     const a = props.avance;
     const de = (h: number, t: number, cosa: string) => `${h} de ${t} ${cosa}`;
     return [
-        { nombre: 'Recibido', dato: a.creado ? fecha(a.creado) : 'Pedido registrado', parcial: 1 },
-        { nombre: 'Toma', dato: actual.value < 1 ? 'Por liberar' : de(a.tareas_hechas, a.tareas, 'tomas'), parcial: fraccion(a.tareas_hechas, a.tareas) },
+        {
+            nombre: 'Registrado',
+            dato: actual.value === 0 ? 'Por liberar' : a.creado ? fecha(a.creado) : 'Liberado',
+            parcial: 1,
+        },
+        { nombre: 'Toma', dato: actual.value < 1 ? '—' : de(a.tareas_hechas, a.tareas, 'tomas'), parcial: fraccion(a.tareas_hechas, a.tareas) },
         { nombre: 'Separación', dato: actual.value < 2 ? '—' : de(a.separados, a.destinos, 'destinos'), parcial: fraccion(a.separados, a.destinos) },
         {
             nombre: 'Revisión',
