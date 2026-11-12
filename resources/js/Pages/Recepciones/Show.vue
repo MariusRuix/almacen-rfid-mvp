@@ -22,12 +22,14 @@ interface Linea {
     id: number; producto: Producto; cajas: number; piezas_por_caja: number; esperadas: number;
     leidas: number | null; confirmadas: number | null; sin_accesorio: number; diferencia: number | null;
     ubicacion: UbicacionCorta | null; ubicada: boolean; sugerida: UbicacionCorta | null; no_esperado: boolean;
+    danadas: number; sin_etiqueta: number;
 }
 
 const props = defineProps<{
     recepcion: {
         id: number; folio: string; estado: string; origen: string; fecha_esperada: string;
         cerrada_at: string | null; cerro: string | null; pedimento: Pedimento; lineas: Linea[];
+        conteo: null | { cajas: number; anuladas: number; terminado_at: string | null; termino: string | null };
     };
     ubicaciones: { id: number; codigo: string; zona: string; capacidad: number; ocupadas: number }[];
     zonaRecepcion: string;
@@ -58,7 +60,7 @@ const cambiada = (l: Linea) => l.confirmadas === null || edicion[l.id].confirmad
 const totales = computed(() => {
     const esperadas = props.recepcion.lineas.reduce((s, l) => s + l.esperadas, 0);
     const confirmadas = props.recepcion.lineas.reduce((s, l) => s + (l.confirmadas ?? 0), 0);
-    const sinAccesorio = props.recepcion.lineas.reduce((s, l) => s + l.sin_accesorio, 0);
+    const sinAccesorio = props.recepcion.lineas.reduce((s, l) => s + l.sin_accesorio + l.danadas, 0);
     const conDif = props.recepcion.lineas.filter((l) => l.diferencia).length;
     return { esperadas, confirmadas, sinAccesorio, conDif, diferencia: confirmadas - esperadas };
 });
@@ -72,6 +74,7 @@ const resultado = computed(() => {
 
 // Corrección de lo esperado (antes de leer) y SKU no esperados (durante el conteo)
 const editarEsperado = computed(() => props.recepcion.estado === 'esperada' && esResponsable.value);
+const porCajas = computed(() => props.recepcion.conteo !== null);
 const enConteo = computed(() => props.recepcion.estado === 'en_conteo');
 const cambioEsperado = (l: Linea) => esperado[l.id].cajas !== l.cajas || esperado[l.id].piezas_por_caja !== l.piezas_por_caja;
 function guardarEsperado(l: Linea) {
@@ -138,11 +141,13 @@ function guardar(l: Linea) {
     router.put(`/recepcion-lineas/${l.id}`, edicion[l.id], { ...opciones, ...con(`guardar-${l.id}`) });
 }
 async function cerrar() {
+    const detalle0: string[] = [];
     const t = totales.value;
     const buenas = t.confirmadas - t.sinAccesorio;
-    const incidencias = props.recepcion.lineas.filter((l) => l.diferencia).length + props.recepcion.lineas.filter((l) => l.sin_accesorio).length;
-    const detalle = [`${n(buenas)} piezas entran al inventario en ${props.zonaRecepcion}, listas para ubicarse.`];
-    if (t.sinAccesorio) detalle.push(`${n(t.sinAccesorio)} piezas sin accesorio se apartan como incidencia.`);
+    if (porCajas.value && !props.recepcion.conteo!.terminado_at) detalle0.push('El auxiliar todavía no marca el conteo como terminado.');
+    const incidencias = props.recepcion.lineas.filter((l) => l.diferencia).length + props.recepcion.lineas.filter((l) => l.sin_accesorio).length + props.recepcion.lineas.filter((l) => l.danadas).length;
+    const detalle = [...detalle0, `${n(buenas)} piezas entran al inventario en ${props.zonaRecepcion}, listas para ubicarse.`];
+    if (t.sinAccesorio) detalle.push(`${n(t.sinAccesorio)} piezas sin accesorio o dañadas se apartan como incidencia.`);
     detalle.push(incidencias ? `Se ${incidencias === 1 ? 'creará 1 incidencia' : `crearán ${incidencias} incidencias`} por las diferencias.` : 'Todo cuadra: no se crearán incidencias.');
     detalle.push('Después de cerrar ya no se puede cambiar el conteo.');
     const ok = await confirmar({ titulo: `¿Cerrar la recepción ${props.recepcion.folio}?`, detalle, aceptar: 'Cerrar recepción' });
@@ -168,13 +173,14 @@ function ubicar(l: Linea) {
                 </dl>
             </template>
             <template v-if="!cerrada">
-                <button v-if="leida" type="button" class="btn btn-secundario" title="Simula que se corrigió el conteo físico y se vuelve a pasar el lector" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="releer">
+                <template v-if="porCajas" />
+                <button v-else-if="leida" type="button" class="btn btn-secundario" title="Simula que se corrigió el conteo físico y se vuelve a pasar el lector" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="releer">
                     <Girando v-if="es('leer')" /><RotateCcw v-else class="size-4" />Volver a leer
                 </button>
                 <button v-else type="button" class="btn btn-primario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="leer()">
                     <Girando v-if="es('leer')" /><ScanLine v-else class="size-4" />{{ es('leer') ? 'Leyendo…' : 'Leer RFID' }}
                 </button>
-                <button v-if="esResponsable && leida" type="button" class="btn btn-primario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="cerrar">
+                <button v-if="esResponsable && (leida || porCajas)" type="button" class="btn btn-primario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="cerrar">
                     <Girando v-if="es('cerrar')" /><Lock v-else class="size-4" />{{ es('cerrar') ? 'Cerrando…' : 'Cerrar recepción' }}
                 </button>
             </template>
@@ -185,7 +191,7 @@ function ubicar(l: Linea) {
             <template v-if="leida">
                 Esperadas <b class="num">{{ n(totales.esperadas) }}</b> · confirmadas <b class="num">{{ n(totales.confirmadas) }}</b> ·
                 diferencia <b class="num">{{ conSigno(totales.diferencia) }}</b>
-                <template v-if="totales.sinAccesorio"> · <b class="num">{{ totales.sinAccesorio }}</b> sin accesorio</template>
+                <template v-if="totales.sinAccesorio"> · <b class="num">{{ totales.sinAccesorio }}</b> sin accesorio o dañadas</template>
             </template>
             <template v-else>
                 Pasa el lector por la mercancía recibida para comparar contra el archivo del propietario.
@@ -193,6 +199,14 @@ function ubicar(l: Linea) {
             </template>
         </Resultado>
 
+        <p v-if="porCajas && !cerrada" class="mb-4 flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
+            <ScanLine class="size-4" aria-hidden="true" />
+            Se cuenta caja por caja en piso: <b class="text-ink">{{ recepcion.conteo!.cajas }} cajas leídas</b>
+            <template v-if="recepcion.conteo!.anuladas"> ({{ recepcion.conteo!.anuladas }} anuladas)</template>.
+            <template v-if="recepcion.conteo!.terminado_at"> {{ recepcion.conteo!.termino }} terminó el conteo {{ fechaYHora(recepcion.conteo!.terminado_at) }}.</template>
+            <template v-else> El conteo sigue en curso.</template>
+            <Link :href="`/operador/recepciones/${recepcion.id}`" class="font-semibold text-primary hover:underline">Ver cajas</Link>
+        </p>
         <p v-if="cerrada" class="mb-4 text-sm text-ink-2">
             Cerrada por {{ recepcion.cerro }} el {{ fechaYHora(recepcion.cerrada_at) }}. Lo confirmado está en
             <IdSegmentado :valor="zonaRecepcion" tipo="ubicacion" tam="sm" />;
@@ -208,7 +222,7 @@ function ubicar(l: Linea) {
                         <th class="der">Esperadas</th>
                         <th class="der">Leídas RFID</th>
                         <th class="der">Confirmadas</th>
-                        <th class="der">Sin accesorio</th>
+                        <th class="der">Sin accesorio · dañadas</th>
                         <th class="der">Diferencia</th>
                         <th>{{ cerrada ? 'Ubicación' : '' }}</th>
                     </tr>
@@ -237,23 +251,25 @@ function ubicar(l: Linea) {
                         <td class="der" :class="{ 'celda-oculta': !lectura.visible(i) }">{{ n(l.leidas) }}</td>
                         <td class="der">
                             <span v-if="!lectura.visible(i)" />
-                            <input v-else-if="!cerrada && leida" v-model.number="edicion[l.id].confirmadas" type="number" min="0" class="campo num w-24 text-right" :aria-label="`Confirmadas ${l.producto.sku}`" />
+                            <input v-else-if="!cerrada && leida && !porCajas" v-model.number="edicion[l.id].confirmadas" type="number" min="0" class="campo num w-24 text-right" :aria-label="`Confirmadas ${l.producto.sku}`" />
                             <span v-else class="font-semibold">{{ n(l.confirmadas) }}</span>
+                            <p v-if="l.sin_etiqueta && lectura.visible(i)" class="text-xs text-ink-3">{{ l.sin_etiqueta }} sin etiqueta</p>
                         </td>
                         <td class="der">
                             <span v-if="!lectura.visible(i)" />
                             <template v-else-if="l.producto.accesorio">
-                                <input v-if="!cerrada && leida" v-model.number="edicion[l.id].sin_accesorio" type="number" min="0" class="campo num w-20 text-right" :aria-label="`Sin ${l.producto.accesorio}`" :title="`Piezas sin ${l.producto.accesorio}`" />
+                                <input v-if="!cerrada && leida && !porCajas" v-model.number="edicion[l.id].sin_accesorio" type="number" min="0" class="campo num w-20 text-right" :aria-label="`Sin ${l.producto.accesorio}`" :title="`Piezas sin ${l.producto.accesorio}`" />
                                 <span v-else :class="l.sin_accesorio ? 'font-semibold text-warn' : 'text-ink-3'">{{ l.sin_accesorio }}</span>
                                 <p class="text-xs text-ink-3">{{ l.producto.accesorio }}</p>
                             </template>
-                            <span v-else class="text-ink-3">—</span>
+                            <span v-else-if="!l.danadas" class="text-ink-3">—</span>
+                            <p v-if="l.danadas && lectura.visible(i)" class="text-xs font-semibold text-bad">{{ l.danadas }} dañadas</p>
                         </td>
                         <td class="der font-semibold" :class="[l.diferencia === null ? 'text-ink-3' : l.diferencia === 0 ? 'text-ok' : 'text-bad', { 'celda-oculta': !lectura.visible(i) }]">{{ conSigno(l.diferencia) }}</td>
                         <td>
                             <div v-if="!cerrada" class="flex items-center gap-1">
                                 <button v-if="editarEsperado && cambioEsperado(l)" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" :disabled="!!ocupado" @click="guardarEsperado(l)"><Girando v-if="es(`esperado-${l.id}`)" />Guardar</button>
-                                <button v-else-if="leida && cambiada(l) && lectura.fase.value === 'inactivo'" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" :disabled="!!ocupado" @click="guardar(l)"><Girando v-if="es(`guardar-${l.id}`)" />Guardar</button>
+                                <button v-else-if="leida && !porCajas && cambiada(l) && lectura.fase.value === 'inactivo'" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" :disabled="!!ocupado" @click="guardar(l)"><Girando v-if="es(`guardar-${l.id}`)" />Guardar</button>
                                 <button
                                     v-if="esResponsable && (editarEsperado || (enConteo && l.no_esperado))"
                                     type="button"
@@ -283,7 +299,7 @@ function ubicar(l: Linea) {
             </table>
 
             <!-- Agregar SKU: a lo esperado (antes de leer) o como no esperado (durante el conteo) -->
-            <form v-if="editarEsperado || enConteo" class="flex flex-wrap items-end gap-3 border-t border-line bg-surface-2 px-5 py-4" @submit.prevent="agregar">
+            <form v-if="editarEsperado || (enConteo && !porCajas)" class="flex flex-wrap items-end gap-3 border-t border-line bg-surface-2 px-5 py-4" @submit.prevent="agregar">
                 <div class="min-w-56 flex-1">
                     <label for="nuevo-sku" class="etiqueta">{{ enConteo ? 'Llegó un SKU que no venía en el archivo' : 'Agregar SKU a lo esperado' }}</label>
                     <input id="nuevo-sku" v-model="nuevo.sku" list="skus-recepcion" class="campo font-id uppercase placeholder:normal-case" placeholder="Busca por SKU" autocomplete="off" @change="elegirNuevo" @blur="elegirNuevo" />

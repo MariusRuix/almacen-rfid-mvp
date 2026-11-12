@@ -19,6 +19,8 @@ class RecepcionLinea extends Model
             'piezas_leidas' => 'integer',
             'piezas_confirmadas' => 'integer',
             'piezas_sin_accesorio' => 'integer',
+            'piezas_danadas' => 'integer',
+            'piezas_sin_etiqueta' => 'integer',
         ];
     }
 

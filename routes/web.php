@@ -7,6 +7,7 @@ use App\Http\Controllers\IncidenciaController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\MovimientoController;
 use App\Http\Controllers\OperadorController;
+use App\Http\Controllers\OperadorRecepcionController;
 use App\Http\Controllers\PedidoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\RecepcionController;
@@ -74,6 +75,12 @@ Route::middleware('auth')->group(function () {
 
     // Vista de piso
     Route::get('/operador', [OperadorController::class, 'index']);
+    Route::get('/operador/recepciones/{recepcion}', [OperadorRecepcionController::class, 'show']);
+    Route::post('/operador/recepciones/{recepcion}/cajas', [OperadorRecepcionController::class, 'leerCaja']);
+    Route::post('/operador/recepciones/{recepcion}/terminar', [OperadorRecepcionController::class, 'terminar']);
+    Route::post('/operador/cajas/{caja}/releer', [OperadorRecepcionController::class, 'releer']);
+    Route::put('/operador/cajas/{caja}', [OperadorRecepcionController::class, 'marcar']);
+    Route::post('/operador/cajas/{caja}/anular', [OperadorRecepcionController::class, 'anular']);
     Route::get('/operador/pedidos/{pedido}/surtido', [OperadorController::class, 'surtido']);
     Route::post('/operador/tareas/{tarea}', [OperadorController::class, 'confirmarTarea']);
     Route::get('/operador/pedidos/{pedido}/separacion', [OperadorController::class, 'separacion']);

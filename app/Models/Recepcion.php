@@ -14,7 +14,7 @@ class Recepcion extends Model
 
     protected function casts(): array
     {
-        return ['fecha_esperada' => 'date', 'cerrada_at' => 'datetime'];
+        return ['fecha_esperada' => 'date', 'cerrada_at' => 'datetime', 'conteo_terminado_at' => 'datetime'];
     }
 
     public function pedimento(): BelongsTo
@@ -25,6 +25,16 @@ class Recepcion extends Model
     public function lineas(): HasMany
     {
         return $this->hasMany(RecepcionLinea::class);
+    }
+
+    public function cajas(): HasMany
+    {
+        return $this->hasMany(RecepcionCaja::class)->orderBy('numero');
+    }
+
+    public function terminoConteo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'termino_conteo_id');
     }
 
     public function cerro(): BelongsTo

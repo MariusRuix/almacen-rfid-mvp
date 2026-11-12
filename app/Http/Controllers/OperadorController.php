@@ -25,6 +25,7 @@ class OperadorController extends Controller
                 ->get()->filter(fn ($r) => $r->estado !== 'cerrada' || $r->por_ubicar > 0)->values()
                 ->map(fn ($r) => [
                     'id' => $r->id, 'folio' => $r->folio, 'estado' => $r->estado, 'por_ubicar' => $r->por_ubicar,
+                    'conteo_terminado' => $r->conteo_terminado_at !== null,
                     'pedimento' => Presentar::pedimento($r->pedimento), 'piezas' => (int) $r->lineas_sum_piezas_esperadas,
                 ]),
             'pedidos' => Pedido::withCount(['tareas as pendientes' => fn ($q) => $q->where('estado', 'pendiente')])

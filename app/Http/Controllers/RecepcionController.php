@@ -47,7 +47,8 @@ class RecepcionController extends Controller
 
     public function show(Recepcion $recepcion): Response
     {
-        $recepcion->load(['pedimento', 'lineas.producto', 'lineas.ubicacion', 'cerro']);
+        $recepcion->load(['pedimento', 'lineas.producto', 'lineas.ubicacion', 'cerro', 'terminoConteo']);
+        $cajas = $recepcion->cajas()->get();
         $rec = Ubicacion::zona('recepcion');
 
         return Inertia::render('Recepciones/Show', [
@@ -59,6 +60,12 @@ class RecepcionController extends Controller
                 'fecha_esperada' => $recepcion->fecha_esperada->toDateString(),
                 'cerrada_at' => $recepcion->cerrada_at?->toDateTimeString(),
                 'cerro' => $recepcion->cerro?->name,
+                'conteo' => $cajas->isEmpty() ? null : [
+                    'cajas' => $cajas->where('estado', 'leida')->count(),
+                    'anuladas' => $cajas->where('estado', 'anulada')->count(),
+                    'terminado_at' => $recepcion->conteo_terminado_at?->toDateTimeString(),
+                    'termino' => $recepcion->terminoConteo?->name,
+                ],
                 'pedimento' => Presentar::pedimento($recepcion->pedimento),
                 'lineas' => $recepcion->lineas->map(fn (RecepcionLinea $l) => [
                     'id' => $l->id,
@@ -69,6 +76,8 @@ class RecepcionController extends Controller
                     'leidas' => $l->piezas_leidas,
                     'confirmadas' => $l->piezas_confirmadas,
                     'sin_accesorio' => $l->piezas_sin_accesorio,
+                    'danadas' => $l->piezas_danadas,
+                    'sin_etiqueta' => $l->piezas_sin_etiqueta,
                     'diferencia' => $l->diferencia(),
                     'ubicacion' => Presentar::ubicacion($l->ubicacion),
                     'ubicada' => $l->ubicada_at !== null,
@@ -92,6 +101,9 @@ class RecepcionController extends Controller
         abort_if($recepcion->estado === 'cerrada', 422);
         $recepcion->load('lineas');
 
+        if ($recepcion->cajas()->exists()) {
+            return back()->with('error', 'Esta recepción se está contando caja por caja en piso.');
+        }
         // Lo que físicamente está: lo esperado, y en renglones no esperados lo que ya se registró.
         $esperado = $recepcion->lineas->mapWithKeys(fn ($l) => [
             $l->producto_id => $l->piezas_esperadas > 0 ? $l->piezas_esperadas : (int) $l->piezas_confirmadas,
@@ -222,7 +234,7 @@ class RecepcionController extends Controller
 
         DB::transaction(function () use ($recepcion, $inventario, $zonaRec, $zonaInc, $request) {
             foreach ($recepcion->lineas as $l) {
-                $buenas = $l->piezas_confirmadas - $l->piezas_sin_accesorio;
+                $buenas = $l->piezas_confirmadas - $l->piezas_sin_accesorio - $l->piezas_danadas;
                 if ($buenas > 0) {
                     $inventario->mover('recepcion', $l->producto_id, $recepcion->pedimento_id, null,
                         ['ubicacion_id' => $zonaRec->id, 'estado' => 'disponible'], $buenas, $recepcion, $recepcion->folio);
@@ -233,6 +245,12 @@ class RecepcionController extends Controller
                         'Llegó sin '.($l->producto->accesorio ?? 'accesorio'));
                     $this->incidencia($recepcion, $l, 'accesorio_faltante', $l->piezas_sin_accesorio,
                         'Llegaron '.$l->piezas_sin_accesorio.' piezas sin '.($l->producto->accesorio ?? 'accesorio').'.', $request->user()->id);
+                }
+                if ($l->piezas_danadas > 0) {
+                    $inventario->mover('recepcion', $l->producto_id, $recepcion->pedimento_id, null,
+                        ['ubicacion_id' => $zonaInc->id, 'estado' => 'incidencia'], $l->piezas_danadas, $recepcion, $recepcion->folio, 'Llegó dañada');
+                    $this->incidencia($recepcion, $l, 'danado', $l->piezas_danadas,
+                        'Llegaron '.$l->piezas_danadas.' piezas dañadas.', $request->user()->id);
                 }
                 $dif = $l->diferencia();
                 if ($dif !== 0) {
@@ -255,7 +273,7 @@ class RecepcionController extends Controller
         abort_if($recepcion->estado !== 'cerrada' || $linea->ubicada_at, 422);
         $datos = $request->validate(['ubicacion_id' => ['required', 'exists:ubicaciones,id']]);
 
-        $cantidad = $linea->piezas_confirmadas - $linea->piezas_sin_accesorio;
+        $cantidad = $linea->piezas_confirmadas - $linea->piezas_sin_accesorio - $linea->piezas_danadas;
         $destino = Ubicacion::findOrFail($datos['ubicacion_id']);
 
         DB::transaction(function () use ($inventario, $linea, $recepcion, $cantidad, $destino) {
@@ -441,7 +459,7 @@ class RecepcionController extends Controller
     /** Sugiere un rack donde ya está el SKU con espacio; si no, el más vacío. */
     private function sugerirUbicacion(RecepcionLinea $l): ?Ubicacion
     {
-        $necesita = $l->piezas_confirmadas - $l->piezas_sin_accesorio;
+        $necesita = $l->piezas_confirmadas - $l->piezas_sin_accesorio - $l->piezas_danadas;
         $candidatas = Ubicacion::whereIn('zona', ['rack', 'adicional'])->where('activa', true)->orderBy('codigo')->get()
             ->map(fn ($u) => [$u, (int) Existencia::where('ubicacion_id', $u->id)->sum('cantidad'),
                 Existencia::where('ubicacion_id', $u->id)->where('producto_id', $l->producto_id)->exists()]);

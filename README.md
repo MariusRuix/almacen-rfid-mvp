@@ -37,6 +37,7 @@ Usa el botón **Reiniciar demo** en la barra lateral (como responsable) o ejecut
 
 1. **Tablero.** Muestra el flujo de 5 etapas y las existencias por pedimento. Un mismo SKU aparece en varios pedimentos.
 2. **Recepción REC-0001.** Pulsa *Leer RFID*: el pantalón **PAN-DEN-3032** sale con −6. Captura 4 bolsas **sin correa**, porque el RFID no detecta accesorios. Elige entre *Volver a leer* (ya se corrigió el conteo) o cerrar con la diferencia. Al cerrar, las diferencias quedan como incidencias y la mercancía entra a `REC-01`. Después ubica cada línea en un rack (el sistema sugiere uno).
+   *En piso:* con el usuario operador, **Vista del operador › REC-0001** cuenta **caja por caja** (23 cajas). La última caja del pantalón trae 6 piezas de menos. En cada caja se marcan las piezas sin etiqueta, sin accesorio o dañadas, y al final se pulsa *Terminar conteo*. La responsable cierra desde su panel. Las migraciones nuevas se aplican con `php artisan migrate` o con **Reiniciar demo**.
 3. **Inventario y mapa.** Filtra por pedimento o ubicación y abre el desglose de un SKU.
 4. **Pedido PED-0001.** Pulsa *Liberar a surtido*. Las instrucciones de toma aplican la regla PEPS por pedimento; con **CAM-OXF-M** salen dos pedimentos distintos.
 5. **Vista del operador** (en tablet o en otra pestaña con el usuario operador): una instrucción a la vez. Ahí se puede probar "No están completas". Después se separa por destino con las actividades de etiquetado y sensor.
