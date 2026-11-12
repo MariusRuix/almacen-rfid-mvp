@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Area;
 use App\Models\Existencia;
 use App\Models\Movimiento;
 use App\Models\Pedimento;
@@ -72,8 +73,24 @@ class InventarioController extends Controller
         // Últimos movimientos de cada ubicación (para el panel lateral)
         $recientes = Movimiento::with(['producto', 'usuario', 'origen', 'destino'])->latest('id')->take(400)->get();
 
+        $ubicaciones = Ubicacion::with('area')->orderBy('codigo')->get();
+
         return Inertia::render('Inventario/Mapa', [
-            'ubicaciones' => Ubicacion::orderBy('codigo')->get()->map(function ($u) use ($porUbicacion, $conHistorial, $recientes) {
+            'areas' => Area::orderBy('orden')->orderBy('id')->get()->map(function (Area $a) use ($ubicaciones, $porUbicacion) {
+                $mias = $ubicaciones->where('area_id', $a->id);
+
+                return [
+                    'id' => $a->id,
+                    'nombre' => $a->nombre,
+                    'descripcion' => $a->descripcion,
+                    'activa' => $a->activa,
+                    'ubicaciones' => $mias->count(),
+                    'piezas' => (int) $mias->sum(fn ($u) => ($porUbicacion[$u->id] ?? collect())->sum('cantidad')),
+                    'capacidad' => (int) $mias->where('activa', true)->sum('capacidad'),
+                    'tiene_operativas' => $mias->contains(fn ($u) => in_array($u->zona, Ubicacion::OPERATIVAS, true)),
+                ];
+            }),
+            'ubicaciones' => $ubicaciones->map(function ($u) use ($porUbicacion, $conHistorial, $recientes) {
                 $filas = $porUbicacion[$u->id] ?? collect();
 
                 return [
@@ -82,6 +99,8 @@ class InventarioController extends Controller
                     'zona' => $u->zona,
                     'capacidad' => $u->capacidad,
                     'activa' => $u->activa,
+                    'area_id' => $u->area_id,
+                    'disponible' => $u->disponible(),
                     'piezas' => (int) $filas->sum('cantidad'),
                     'pedimentos' => $filas->pluck('pedimento_id')->unique()->count(),
                     'incidencia' => $filas->contains('estado', 'incidencia'),

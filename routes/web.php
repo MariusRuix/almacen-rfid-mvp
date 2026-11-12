@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DemoController;
 use App\Http\Controllers\DestinoController;
@@ -45,6 +46,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventario', [InventarioController::class, 'index']);
     Route::get('/inventario/mapa', [InventarioController::class, 'mapa']);
     Route::get('/movimientos', [MovimientoController::class, 'index']);
+    Route::post('/areas', [AreaController::class, 'store'])->middleware('rol:responsable');
+    Route::put('/areas/{area}', [AreaController::class, 'update'])->middleware('rol:responsable');
+    Route::delete('/areas/{area}', [AreaController::class, 'destroy'])->middleware('rol:responsable');
     Route::post('/ubicaciones/pasillo', [UbicacionController::class, 'generarPasillo'])->middleware('rol:responsable');
     Route::post('/ubicaciones', [UbicacionController::class, 'store'])->middleware('rol:responsable');
     Route::put('/ubicaciones/{ubicacion}', [UbicacionController::class, 'update'])->middleware('rol:responsable');

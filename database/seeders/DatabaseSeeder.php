@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Area;
 use App\Models\Destino;
 use App\Models\Pedido;
 use App\Models\Pedimento;
@@ -64,8 +65,9 @@ class DatabaseSeeder extends Seeder
                 }
             }
         }
-        Ubicacion::create(['codigo' => 'AD-01', 'zona' => 'adicional', 'capacidad' => 900]);
-        Ubicacion::create(['codigo' => 'AD-02', 'zona' => 'adicional', 'capacidad' => 900, 'activa' => false]);
+        $temporada = Area::create(['nombre' => 'Temporada', 'descripcion' => 'Ubicaciones adicionales que se habilitan en los picos de enero, mayo y agosto.', 'orden' => 2]);
+        Ubicacion::create(['codigo' => 'AD-01', 'zona' => 'adicional', 'capacidad' => 900, 'area_id' => $temporada->id]);
+        Ubicacion::create(['codigo' => 'AD-02', 'zona' => 'adicional', 'capacidad' => 900, 'activa' => false, 'area_id' => $temporada->id]);
         Ubicacion::create(['codigo' => 'REC-01', 'zona' => 'recepcion', 'capacidad' => 5000]);
         Ubicacion::create(['codigo' => 'PREP-01', 'zona' => 'preparacion', 'capacidad' => 5000]);
         Ubicacion::create(['codigo' => 'INC-01', 'zona' => 'incidencia', 'capacidad' => 1000]);

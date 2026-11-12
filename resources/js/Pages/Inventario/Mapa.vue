@@ -12,7 +12,7 @@ import { estadosExistencia, tiposMovimiento, zonas } from '@/lib/etiquetas';
 import { fecha, fechaYHora, n } from '@/lib/formato';
 import type { FilaMovimiento } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ArrowRightLeft, LayoutGrid, MapPinPlus, Search, Trash2, X } from 'lucide-vue-next';
+import { ArrowRightLeft, FolderPlus, LayoutGrid, MapPinPlus, Pencil, Power, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 
 interface Contenido {
@@ -30,6 +30,8 @@ interface U {
     zona: string;
     capacidad: number;
     activa: boolean;
+    area_id: number | null;
+    disponible: boolean;
     piezas: number;
     pedimentos: number;
     incidencia: boolean;
@@ -37,7 +39,17 @@ interface U {
     contenido: Contenido[];
     movimientos: FilaMovimiento[];
 }
-const props = defineProps<{ ubicaciones: U[] }>();
+interface Area {
+    id: number;
+    nombre: string;
+    descripcion: string | null;
+    activa: boolean;
+    ubicaciones: number;
+    piezas: number;
+    capacidad: number;
+    tiene_operativas: boolean;
+}
+const props = defineProps<{ areas: Area[]; ubicaciones: U[] }>();
 const { esResponsable } = useCompartido();
 const { ocupado, con, es } = useOcupado();
 const opciones = { preserveScroll: true };
@@ -105,35 +117,79 @@ const pasillos = computed(() => {
         const mapa = new Map(us.map((u) => [u.codigo, u]));
         return {
             pasillo,
+            areaId: us[0].area_id,
             tipo: us.every((u) => u.zona === 'estanteria') ? 'Estantería' : 'Rack',
             modulos,
             niveles,
             celda: (m: string, nv: string) => mapa.get(`${pasillo}-${m}-${nv}`),
             piezas: us.reduce((s, u) => s + u.piezas, 0),
-            capacidad: us.reduce((s, u) => s + (u.activa ? u.capacidad : 0), 0),
+            capacidad: us.reduce((s, u) => s + (u.disponible ? u.capacidad : 0), 0),
         };
     });
 });
 const enPasillo = computed(() => new Set(pasillos.value.flatMap((p) => p.modulos.flatMap((m) => p.niveles.map((nv) => p.celda(m, nv)?.id)))));
-const otras = computed(() => {
+const otrasDe = (areaId: number) => {
     const grupos: Record<string, U[]> = {};
-    for (const u of props.ubicaciones) if (!enPasillo.value.has(u.id)) (grupos[u.zona] ??= []).push(u);
+    for (const u of props.ubicaciones) if (u.area_id === areaId && !enPasillo.value.has(u.id)) (grupos[u.zona] ??= []).push(u);
     const orden = ['piso', 'adicional', 'rack', 'estanteria', 'recepcion', 'preparacion', 'incidencia'];
     return Object.entries(grupos).sort((a, b) => orden.indexOf(a[0]) - orden.indexOf(b[0]));
-});
+};
+const pasillosDe = (areaId: number) => pasillos.value.filter((p) => p.areaId === areaId);
+
+// ---------- Áreas ----------
+const vista = ref<number | 'todas'>('todas');
+const areasVisibles = computed(() => (vista.value === 'todas' ? props.areas : props.areas.filter((a) => a.id === vista.value)));
+const pctArea = (a: Area) => (a.capacidad ? Math.round((a.piezas / a.capacidad) * 100) : 0);
+const halladosEn = (areaId: number) => (buscar.value.trim() ? props.ubicaciones.filter((u) => u.area_id === areaId && coincide(u)).length : 0);
+const areaPorDefecto = () => (typeof vista.value === 'number' ? vista.value : (props.areas[0]?.id ?? null));
+
+const nuevaArea = useForm({ nombre: '', descripcion: '' });
+function crearArea() {
+    nuevaArea.post('/areas', { ...opciones, onSuccess: () => { panelAlta.value = null; nuevaArea.reset(); } });
+}
+const areaEditando = ref<number | null>(null);
+const areaForm = reactive({ nombre: '', descripcion: '' });
+function editarArea(a: Area) {
+    areaEditando.value = a.id;
+    Object.assign(areaForm, { nombre: a.nombre, descripcion: a.descripcion ?? '' });
+}
+function guardarArea(a: Area) {
+    router.put(`/areas/${a.id}`, { ...areaForm, activa: a.activa }, { ...opciones, ...con(`area-${a.id}`), onSuccess: () => (areaEditando.value = null) });
+}
+async function alternarArea(a: Area) {
+    if (a.activa) {
+        const ok = await confirmar({
+            titulo: `¿Desactivar "${a.nombre}"?`,
+            detalle: [`Sus ${a.ubicaciones} ubicaciones dejan de sugerirse y de recibir mercancía.`, 'Se puede volver a activar cuando se necesite, por ejemplo en temporada.'],
+            aceptar: 'Desactivar área',
+            tono: 'peligro',
+        });
+        if (!ok) return;
+    }
+    router.put(`/areas/${a.id}`, { nombre: a.nombre, descripcion: a.descripcion, activa: !a.activa }, { ...opciones, ...con(`area-${a.id}`) });
+}
+async function borrarArea(a: Area) {
+    const ok = await confirmar({ titulo: `¿Borrar el área "${a.nombre}"?`, mensaje: 'No tiene ubicaciones.', aceptar: 'Borrar área', tono: 'peligro' });
+    if (ok) router.delete(`/areas/${a.id}`, { ...opciones, ...con(`area-${a.id}`), onSuccess: () => (vista.value = 'todas') });
+}
 
 // ---------- Panel lateral ----------
 const elegidaId = ref<number | null>(null);
 const elegida = computed(() => props.ubicaciones.find((u) => u.id === elegidaId.value) ?? null);
-const edicion = reactive({ capacidad: 0, zona: '', activa: true });
+const edicion = reactive({ capacidad: 0, zona: '', activa: true, area_id: null as number | null });
 watch(
     elegida,
     (u) => {
-        if (u) Object.assign(edicion, { capacidad: u.capacidad, zona: u.zona, activa: u.activa });
+        if (u) Object.assign(edicion, { capacidad: u.capacidad, zona: u.zona, activa: u.activa, area_id: u.area_id });
     },
     { immediate: true },
 );
-const editada = computed(() => !!elegida.value && (edicion.capacidad !== elegida.value.capacidad || edicion.zona !== elegida.value.zona || edicion.activa !== elegida.value.activa));
+const editada = computed(
+    () =>
+        !!elegida.value &&
+        (edicion.capacidad !== elegida.value.capacidad || edicion.zona !== elegida.value.zona || edicion.activa !== elegida.value.activa || edicion.area_id !== elegida.value.area_id),
+);
+const nombreArea = (id: number | null) => props.areas.find((a) => a.id === id)?.nombre ?? '';
 function guardarUbicacion() {
     if (!elegida.value) return;
     router.put(`/ubicaciones/${elegida.value.id}`, { ...edicion }, { ...opciones, ...con('editar') });
@@ -155,7 +211,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', alTeclado));
 const reubicando = ref<number | null>(null);
 const mover = reactive({ destino_id: null as number | null, cantidad: 0 });
 const destinos = computed(() =>
-    props.ubicaciones.filter((u) => u.activa && ALMACENAJE.includes(u.zona) && u.id !== elegida.value?.id).sort((a, b) => a.codigo.localeCompare(b.codigo)),
+    props.ubicaciones.filter((u) => u.disponible && ALMACENAJE.includes(u.zona) && u.id !== elegida.value?.id).sort((a, b) => a.codigo.localeCompare(b.codigo)),
 );
 function abrirReubicar(c: Contenido) {
     reubicando.value = c.existencia_id;
@@ -172,8 +228,13 @@ function reubicar(c: Contenido) {
 const puedeReubicar = (u: U, c: Contenido) => c.estado === 'disponible' && ALMACENAJE.includes(u.zona);
 
 // ---------- Altas ----------
-const panelAlta = ref<'pasillo' | 'ubicacion' | null>(null);
-const pasillo = useForm({ pasillo: '', modulos: 4, niveles: 3, capacidad: 600, zona: 'rack' as 'rack' | 'estanteria' });
+const panelAlta = ref<'pasillo' | 'ubicacion' | 'area' | null>(null);
+function abrirAlta(tipo: 'pasillo' | 'ubicacion' | 'area') {
+    panelAlta.value = panelAlta.value === tipo ? null : tipo;
+    pasillo.area_id = areaPorDefecto();
+    suelta.area_id = areaPorDefecto();
+}
+const pasillo = useForm({ pasillo: '', modulos: 4, niveles: 3, capacidad: 600, zona: 'rack' as 'rack' | 'estanteria', area_id: null as number | null });
 const vistaPrevia = computed(() => {
     const p = pasillo.pasillo.trim().toUpperCase() || '?';
     const total = (pasillo.modulos || 0) * (pasillo.niveles || 0);
@@ -182,7 +243,7 @@ const vistaPrevia = computed(() => {
 function crearPasillo() {
     pasillo.post('/ubicaciones/pasillo', { ...opciones, onSuccess: () => { panelAlta.value = null; pasillo.reset(); } });
 }
-const suelta = useForm({ codigo: '', zona: 'adicional', capacidad: 900 });
+const suelta = useForm({ codigo: '', zona: 'adicional', capacidad: 900, area_id: null as number | null });
 function crearUbicacion() {
     suelta.post('/ubicaciones', { ...opciones, onSuccess: () => { panelAlta.value = null; suelta.reset(); } });
 }
@@ -193,15 +254,23 @@ function crearUbicacion() {
     <AppLayout>
         <Encabezado titulo="Mapa de ubicaciones" descripcion="Dónde está cada producto y qué tan llena está cada posición. Toca una ubicación para ver su contenido o reubicar.">
             <template v-if="esResponsable">
-                <button type="button" class="btn btn-secundario" @click="panelAlta = panelAlta === 'ubicacion' ? null : 'ubicacion'"><MapPinPlus class="size-4" />Nueva ubicación</button>
-                <button type="button" class="btn btn-primario" @click="panelAlta = panelAlta === 'pasillo' ? null : 'pasillo'"><LayoutGrid class="size-4" />Nuevo pasillo</button>
+                <button type="button" class="btn btn-secundario" @click="abrirAlta('area')"><FolderPlus class="size-4" />Nueva área</button>
+                <button type="button" class="btn btn-secundario" @click="abrirAlta('ubicacion')"><MapPinPlus class="size-4" />Posición suelta</button>
+                <button type="button" class="btn btn-primario" @click="abrirAlta('pasillo')"><LayoutGrid class="size-4" />Nuevo pasillo</button>
             </template>
         </Encabezado>
 
         <!-- Alta de pasillo -->
         <form v-if="panelAlta === 'pasillo'" class="panel mb-6 p-5" @submit.prevent="crearPasillo">
-            <h2 class="mb-4 text-lg font-bold">Nuevo pasillo</h2>
-            <div class="grid gap-4 sm:grid-cols-5">
+            <h2 class="text-lg font-bold">Nuevo pasillo</h2>
+            <p class="mb-4 text-sm text-ink-2">Crea de una vez todas las posiciones de un rack o estantería: pasillo × módulos × niveles.</p>
+            <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                <div>
+                    <label for="p-area" class="etiqueta">Área</label>
+                    <select id="p-area" v-model="pasillo.area_id" class="campo" required>
+                        <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.nombre }}</option>
+                    </select>
+                </div>
                 <div>
                     <label for="p-letra" class="etiqueta">Pasillo</label>
                     <input id="p-letra" v-model="pasillo.pasillo" class="campo font-id uppercase placeholder:normal-case" maxlength="2" placeholder="C" required />
@@ -239,8 +308,15 @@ function crearUbicacion() {
 
         <!-- Alta de ubicación suelta -->
         <form v-if="panelAlta === 'ubicacion'" class="panel mb-6 p-5" @submit.prevent="crearUbicacion">
-            <h2 class="mb-4 text-lg font-bold">Nueva ubicación</h2>
-            <div class="grid gap-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+            <h2 class="text-lg font-bold">Posición suelta</h2>
+            <p class="mb-4 text-sm text-ink-2">Un lugar que no forma parte de un rack: posición de piso, adicional de temporada o cuarentena. Para racks, usa <b>Nuevo pasillo</b>.</p>
+            <div class="grid gap-4 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] sm:items-end">
+                <div>
+                    <label for="u-area" class="etiqueta">Área</label>
+                    <select id="u-area" v-model="suelta.area_id" class="campo" required>
+                        <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.nombre }}</option>
+                    </select>
+                </div>
                 <div>
                     <label for="u-cod" class="etiqueta">Código</label>
                     <input id="u-cod" v-model="suelta.codigo" class="campo font-id uppercase placeholder:normal-case" placeholder="AD-03 o PISO-01" maxlength="20" required />
@@ -259,6 +335,27 @@ function crearUbicacion() {
                 <div class="flex gap-2">
                     <button type="button" class="btn btn-secundario" @click="panelAlta = null">Cancelar</button>
                     <button type="submit" class="btn btn-primario" :disabled="suelta.processing"><Girando v-if="suelta.processing" />Crear</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Alta de área -->
+        <form v-if="panelAlta === 'area'" class="panel mb-6 p-5" @submit.prevent="crearArea">
+            <h2 class="text-lg font-bold">Nueva área</h2>
+            <p class="mb-4 text-sm text-ink-2">Agrupa pasillos y posiciones, por ejemplo "Temporada" o "Mezzanine". Un área se puede desactivar completa cuando no se usa.</p>
+            <div class="grid gap-4 sm:grid-cols-[1fr_2fr_auto] sm:items-end">
+                <div>
+                    <label for="a-nombre" class="etiqueta">Nombre</label>
+                    <input id="a-nombre" v-model="nuevaArea.nombre" class="campo" maxlength="60" placeholder="Temporada" required />
+                    <p v-if="nuevaArea.errors.nombre" class="mt-1 text-sm text-bad">{{ nuevaArea.errors.nombre }}</p>
+                </div>
+                <div>
+                    <label for="a-desc" class="etiqueta">Descripción <span class="font-normal text-ink-3">(opcional)</span></label>
+                    <input id="a-desc" v-model="nuevaArea.descripcion" class="campo" maxlength="160" placeholder="Se habilita en los picos de enero, mayo y agosto" />
+                </div>
+                <div class="flex gap-2">
+                    <button type="button" class="btn btn-secundario" @click="panelAlta = null">Cancelar</button>
+                    <button type="submit" class="btn btn-primario" :disabled="nuevaArea.processing"><Girando v-if="nuevaArea.processing" />Crear área</button>
                 </div>
             </div>
         </form>
@@ -285,9 +382,71 @@ function crearUbicacion() {
             </ul>
         </div>
 
+        <!-- Áreas -->
+        <div class="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="Áreas">
+            <button type="button" role="tab" :aria-selected="vista === 'todas'" class="area-chip" :class="{ activo: vista === 'todas' }" @click="vista = 'todas'">Todas las áreas</button>
+            <button
+                v-for="a in areas"
+                :key="a.id"
+                type="button"
+                role="tab"
+                :aria-selected="vista === a.id"
+                class="area-chip"
+                :class="{ activo: vista === a.id, apagada: !a.activa }"
+                @click="vista = a.id"
+            >
+                <span class="font-semibold">{{ a.nombre }}</span>
+                <span class="text-xs" :class="vista === a.id ? 'opacity-80' : 'text-ink-3'">{{ a.activa ? `${pctArea(a)} %` : 'desactivada' }}</span>
+                <span v-if="halladosEn(a.id)" class="rounded-full bg-marca px-1.5 text-xs font-bold text-white">{{ halladosEn(a.id) }}</span>
+            </button>
+        </div>
+
+        <section v-for="area in areasVisibles" :key="area.id" class="mb-10" :class="{ 'area-apagada': !area.activa }">
+            <header class="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-line pb-3">
+                <div class="min-w-0">
+                    <template v-if="areaEditando === area.id">
+                        <form class="flex flex-wrap items-end gap-2" @submit.prevent="guardarArea(area)">
+                            <input v-model="areaForm.nombre" class="campo w-56 font-display text-lg font-bold" maxlength="60" aria-label="Nombre del área" required />
+                            <input v-model="areaForm.descripcion" class="campo w-80" maxlength="160" placeholder="Descripción (opcional)" aria-label="Descripción del área" />
+                            <button type="submit" class="btn btn-primario" :disabled="!!ocupado"><Girando v-if="es(`area-${area.id}`)" />Guardar</button>
+                            <button type="button" class="btn btn-secundario" @click="areaEditando = null">Cancelar</button>
+                        </form>
+                    </template>
+                    <template v-else>
+                        <h2 class="flex items-center gap-2 text-xl font-bold">
+                            {{ area.nombre }}
+                            <span v-if="!area.activa" class="rounded bg-surface-2 px-2 py-0.5 text-xs font-semibold text-ink-2">Desactivada</span>
+                        </h2>
+                        <p v-if="area.descripcion" class="text-sm text-ink-2">{{ area.descripcion }}</p>
+                    </template>
+                    <div class="mt-2 flex items-center gap-3 text-sm text-ink-2">
+                        <div class="h-1.5 w-40 overflow-hidden rounded-full bg-surface-2"><div class="h-full bg-primary" :style="{ width: Math.min(100, pctArea(area)) + '%' }" /></div>
+                        <span><b class="num text-ink">{{ n(area.piezas) }}</b> de {{ n(area.capacidad) }} piezas · {{ area.ubicaciones }} ubicaciones</span>
+                    </div>
+                </div>
+                <div v-if="esResponsable && areaEditando !== area.id" class="flex flex-wrap gap-1">
+                    <button type="button" class="btn btn-secundario min-h-9 px-3 text-sm" @click="editarArea(area)"><Pencil class="size-4" />Editar</button>
+                    <button
+                        v-if="!area.tiene_operativas"
+                        type="button"
+                        class="btn btn-secundario min-h-9 px-3 text-sm"
+                        :disabled="!!ocupado"
+                        :title="area.activa && area.piezas ? 'Tiene piezas: reubícalas antes de desactivarla' : ''"
+                        @click="alternarArea(area)"
+                    >
+                        <Girando v-if="es(`area-${area.id}`)" /><Power v-else class="size-4" />{{ area.activa ? 'Desactivar' : 'Activar' }}
+                    </button>
+                    <button v-if="!area.ubicaciones && areas.length > 1" type="button" class="btn btn-secundario min-h-9 px-3 text-sm" @click="borrarArea(area)"><Trash2 class="size-4" />Borrar</button>
+                </div>
+            </header>
+
+            <p v-if="!area.ubicaciones" class="rounded-ui border border-dashed border-line-strong bg-surface-2 px-4 py-6 text-center text-ink-2">
+                Esta área todavía no tiene ubicaciones. Agrégale un <b>pasillo</b> o una <b>posición suelta</b>.
+            </p>
+
         <!-- Pasillos -->
         <div class="grid gap-6 xl:grid-cols-2">
-            <section v-for="p in pasillos" :key="p.pasillo" class="panel p-5">
+            <section v-for="p in pasillosDe(area.id)" :key="p.pasillo" class="panel p-5">
                 <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                     <h2 class="text-lg font-bold">Pasillo {{ p.pasillo }} <span class="text-sm font-normal text-ink-3">· {{ p.tipo }}, vista de frente</span></h2>
                     <p class="num text-sm text-ink-2">{{ n(p.piezas) }} de {{ n(p.capacidad) }} piezas</p>
@@ -305,14 +464,14 @@ function crearUbicacion() {
                                     class="celda"
                                     :class="[
                                         `oc-${nivel(p.celda(m, nv)!)}`,
-                                        { inactiva: !p.celda(m, nv)!.activa, apagada: !coincide(p.celda(m, nv)!), hallada: buscar && coincide(p.celda(m, nv)!), elegida: elegidaId === p.celda(m, nv)!.id },
+                                        { inactiva: !p.celda(m, nv)!.disponible, apagada: !coincide(p.celda(m, nv)!), hallada: buscar && coincide(p.celda(m, nv)!), elegida: elegidaId === p.celda(m, nv)!.id },
                                     ]"
                                     :aria-label="`${p.celda(m, nv)!.codigo}: ${p.celda(m, nv)!.piezas} de ${p.celda(m, nv)!.capacidad} piezas`"
                                     @click="elegidaId = p.celda(m, nv)!.id"
                                 >
                                     <span class="font-id text-xs font-semibold">{{ p.celda(m, nv)!.codigo }}</span>
                                     <span class="flex items-baseline justify-between gap-1 text-xs">
-                                        <span class="num font-semibold">{{ p.celda(m, nv)!.activa ? n(p.celda(m, nv)!.piezas) : 'inactiva' }}</span>
+                                        <span class="num font-semibold">{{ p.celda(m, nv)!.disponible ? n(p.celda(m, nv)!.piezas) : 'inactiva' }}</span>
                                         <span v-if="p.celda(m, nv)!.pedimentos > 1" class="rounded bg-warn-bg px-1 font-semibold text-warn">{{ p.celda(m, nv)!.pedimentos }} ped.</span>
                                     </span>
                                 </button>
@@ -325,7 +484,7 @@ function crearUbicacion() {
         </div>
 
         <!-- Otras ubicaciones por zona -->
-        <section v-for="[zona, us] in otras" :key="zona" class="mt-6">
+        <section v-for="[zona, us] in otrasDe(area.id)" :key="zona" class="mt-5">
             <h2 class="mb-2 text-sm font-semibold text-ink-2">{{ zonas[zona] ?? zona }}</h2>
             <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                 <button
@@ -333,16 +492,18 @@ function crearUbicacion() {
                     :key="u.id"
                     type="button"
                     class="celda"
-                    :class="[`oc-${nivel(u)}`, { inactiva: !u.activa, apagada: !coincide(u), hallada: buscar && coincide(u), elegida: elegidaId === u.id }]"
+                    :class="[`oc-${nivel(u)}`, { inactiva: !u.disponible, apagada: !coincide(u), hallada: buscar && coincide(u), elegida: elegidaId === u.id }]"
                     @click="elegidaId = u.id"
                 >
                     <span class="font-id text-xs font-semibold">{{ u.codigo }}</span>
                     <span class="flex items-baseline justify-between gap-1 text-xs">
-                        <span class="num font-semibold">{{ u.activa ? n(u.piezas) : 'inactiva' }}</span>
+                        <span class="num font-semibold">{{ u.disponible ? n(u.piezas) : 'inactiva' }}</span>
                         <span class="text-ink-3">de {{ n(u.capacidad) }}</span>
                     </span>
                 </button>
             </div>
+        </section>
+
         </section>
 
         <PreguntaAbierta class="mt-6">¿Cómo nombran hoy sus ubicaciones? ¿La capacidad la piensan en piezas, cajas o tarimas? ¿Se puede mezclar más de un pedimento en una misma posición?</PreguntaAbierta>
@@ -356,7 +517,9 @@ function crearUbicacion() {
                         <header class="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
                             <div>
                                 <IdSegmentado :valor="elegida.codigo" tipo="ubicacion" tam="lg" />
-                                <p class="mt-1 text-sm text-ink-2">{{ zonas[elegida.zona] ?? elegida.zona }}<template v-if="!elegida.activa"> · desactivada</template></p>
+                                <p class="mt-1 text-sm text-ink-2">
+                                    {{ zonas[elegida.zona] ?? elegida.zona }} · {{ nombreArea(elegida.area_id) }}<template v-if="!elegida.disponible"> · no recibe mercancía</template>
+                                </p>
                             </div>
                             <button type="button" class="flex size-10 items-center justify-center rounded-ui text-ink-2 hover:bg-surface-2" aria-label="Cerrar" @click="elegidaId = null"><X class="size-5" /></button>
                         </header>
@@ -429,6 +592,12 @@ function crearUbicacion() {
                             <section v-if="esResponsable" class="rounded-ui border border-line p-4">
                                 <h3 class="mb-3 font-bold">Configuración</h3>
                                 <div class="grid gap-3 sm:grid-cols-2">
+                                    <div class="sm:col-span-2">
+                                        <label for="e-area" class="etiqueta">Área</label>
+                                        <select id="e-area" v-model="edicion.area_id" class="campo">
+                                            <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.nombre }}{{ a.activa ? '' : ' (desactivada)' }}</option>
+                                        </select>
+                                    </div>
                                     <div>
                                         <label for="e-cap" class="etiqueta">Capacidad (piezas)</label>
                                         <input id="e-cap" v-model.number="edicion.capacidad" type="number" min="1" class="campo num text-right" />
@@ -516,6 +685,34 @@ function crearUbicacion() {
 }
 .elegida {
     box-shadow: 0 0 0 2px var(--primary);
+}
+.area-chip {
+    display: inline-flex;
+    min-height: 2.5rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 0.9rem;
+}
+.area-chip:hover {
+    border-color: var(--ink-3);
+}
+.area-chip.activo {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-ink);
+}
+.area-chip.apagada:not(.activo) {
+    color: var(--ink-2);
+    background: var(--surface-2);
+    border-style: dashed;
+}
+.area-apagada .celda {
+    filter: grayscale(0.6);
 }
 .cajon {
     box-shadow: -12px 0 32px rgb(15 22 30 / 0.18);

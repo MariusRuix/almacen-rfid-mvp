@@ -23,6 +23,7 @@ class UbicacionController extends Controller
             'niveles' => ['required', 'integer', 'min:1', 'max:9'],
             'capacidad' => ['required', 'integer', 'min:1', 'max:100000'],
             'zona' => ['required', Rule::in(['rack', 'estanteria'])],
+            'area_id' => ['required', 'exists:areas,id'],
         ], [
             'pasillo.regex' => 'El pasillo es una o dos letras, por ejemplo C.',
             'modulos.*' => 'Entre 1 y 40 módulos.',
@@ -43,7 +44,7 @@ class UbicacionController extends Controller
 
         DB::transaction(function () use ($codigos, $datos) {
             foreach ($codigos as $codigo) {
-                Ubicacion::create(['codigo' => $codigo, 'zona' => $datos['zona'], 'capacidad' => $datos['capacidad']]);
+                Ubicacion::create(['codigo' => $codigo, 'zona' => $datos['zona'], 'capacidad' => $datos['capacidad'], 'area_id' => $datos['area_id']]);
             }
         });
 
@@ -58,6 +59,7 @@ class UbicacionController extends Controller
             'codigo' => ['required', 'max:20', 'regex:/^[A-Z0-9-]+$/', 'unique:ubicaciones,codigo'],
             'zona' => ['required', Rule::in([...Ubicacion::ALMACENAJE, ...Ubicacion::OPERATIVAS])],
             'capacidad' => ['required', 'integer', 'min:1', 'max:100000'],
+            'area_id' => ['required', 'exists:areas,id'],
         ], [
             'codigo.unique' => 'Ya existe una ubicación con ese código.',
             'codigo.regex' => 'Solo letras, números y guiones, por ejemplo AD-03.',
@@ -76,6 +78,7 @@ class UbicacionController extends Controller
             'capacidad' => ['required', 'integer', 'min:1', 'max:100000'],
             'zona' => ['required', Rule::in($operativa ? [$ubicacion->zona] : Ubicacion::ALMACENAJE)],
             'activa' => ['required', 'boolean'],
+            'area_id' => ['required', 'exists:areas,id'],
         ], ['zona.in' => 'Las zonas de recepción, preparación e incidencias no cambian de tipo.']);
 
         if (! $datos['activa'] && $operativa) {
@@ -113,12 +116,12 @@ class UbicacionController extends Controller
         ], ['cantidad.*' => 'Indica cuántas piezas mover (1 o más).']);
 
         $existencia = Existencia::with(['producto', 'ubicacion'])->findOrFail($datos['existencia_id']);
-        $destino = Ubicacion::findOrFail($datos['destino_id']);
+        $destino = Ubicacion::with('area')->findOrFail($datos['destino_id']);
 
         if ($existencia->estado !== 'disponible' || ! in_array($existencia->ubicacion->zona, Ubicacion::ALMACENAJE, true)) {
             return back()->with('error', 'Solo se reubica mercancía almacenada en racks, estantes, piso o adicionales.');
         }
-        if (! $destino->activa || ! in_array($destino->zona, Ubicacion::ALMACENAJE, true) || $destino->id === $existencia->ubicacion_id) {
+        if (! $destino->disponible() || ! in_array($destino->zona, Ubicacion::ALMACENAJE, true) || $destino->id === $existencia->ubicacion_id) {
             return back()->with('error', 'Elige una ubicación de almacenaje activa y distinta a la actual.');
         }
         if ($datos['cantidad'] > $existencia->cantidad) {
