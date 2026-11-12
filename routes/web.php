@@ -53,6 +53,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/pedidos/{pedido}/liberar', [PedidoController::class, 'liberar'])->middleware('rol:responsable');
     Route::post('/pedidos/{pedido}/despachar', [PedidoController::class, 'despachar'])->middleware('rol:responsable');
     Route::post('/pedido-destinos/{destino}/leer', [PedidoController::class, 'leerDestino']);
+    Route::post('/pedido-destinos/{destino}/contar', [PedidoController::class, 'contarDestino']);
     Route::post('/pedido-destinos/{destino}/corregir', [PedidoController::class, 'corregirDestino']);
     Route::post('/pedido-destinos/{destino}/actividades', [PedidoController::class, 'actividad']);
     Route::post('/pedido-destinos/{destino}/aceptar', [PedidoController::class, 'aceptarLectura'])->middleware('rol:responsable');
@@ -77,6 +78,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/operador', [OperadorController::class, 'index']);
     Route::get('/operador/recepciones/{recepcion}', [OperadorRecepcionController::class, 'show']);
     Route::post('/operador/recepciones/{recepcion}/cajas', [OperadorRecepcionController::class, 'leerCaja']);
+    Route::post('/operador/recepciones/{recepcion}/cajas-manuales', [OperadorRecepcionController::class, 'registrarManual']);
     Route::post('/operador/recepciones/{recepcion}/terminar', [OperadorRecepcionController::class, 'terminar']);
     Route::post('/operador/cajas/{caja}/releer', [OperadorRecepcionController::class, 'releer']);
     Route::put('/operador/cajas/{caja}', [OperadorRecepcionController::class, 'marcar']);

@@ -71,6 +71,8 @@ export interface DestinoPedido {
     estado: string;
     bultos: number;
     verificado_at: string | null;
+    verificacion: 'rfid' | 'manual' | null;
+    verifico: string | null;
     actividades: { campo: string; etiqueta: string; hecha: boolean }[];
     lineas: LineaPedido[];
 }

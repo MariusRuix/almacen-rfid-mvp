@@ -12,7 +12,7 @@ import { conSigno, fechaYHora, n } from '@/lib/formato';
 import type { Pedimento, Producto } from '@/types';
 import { router } from '@inertiajs/vue3';
 import { Head } from '@inertiajs/vue3';
-import { Ban, CheckCheck, RotateCcw, ScanLine, Undo2 } from 'lucide-vue-next';
+import { Ban, Barcode, CheckCheck, Hand, RotateCcw, ScanLine, Undo2, X } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 interface CajaLinea {
@@ -28,6 +28,7 @@ interface Caja {
     id: number;
     numero: number;
     estado: 'leida' | 'anulada';
+    origen: 'rfid' | 'codigo' | 'manual';
     usuario: string | null;
     hora: string;
     lineas: CajaLinea[];
@@ -36,6 +37,7 @@ interface Linea {
     id: number;
     producto: Producto;
     cajas_esperadas: number;
+    piezas_por_caja: number;
     esperadas: number;
     leidas: number;
     confirmadas: number;
@@ -55,6 +57,7 @@ const props = defineProps<{
         lineas: Linea[];
         cajas: Caja[];
     };
+    catalogo: { id: number; sku: string; upc: string | null; descripcion: string; piezas_por_caja: number; accesorio: string | null }[];
 }>();
 
 const { ocupado, con, es } = useOcupado();
@@ -142,6 +145,49 @@ async function terminar() {
     if (ok) router.post(`/operador/recepciones/${props.recepcion.id}/terminar`, {}, con('terminar'));
 }
 
+// Captura sin lector RFID: a mano o con escáner de código de barras (el escáner "teclea" el código y un Enter)
+const manual = reactive({ abierto: false, codigo: '', productoId: null as number | null, origen: 'manual' as 'manual' | 'codigo', piezas: 0, aviso: '' });
+const pendientes = computed(() => props.recepcion.lineas.filter((l) => l.cajas_leidas < l.cajas_esperadas));
+const productoManual = computed(() => props.catalogo.find((p) => p.id === manual.productoId) ?? null);
+const piezasPorCaja = computed(() => {
+    const l = props.recepcion.lineas.find((x) => x.producto.id === manual.productoId);
+    return l?.piezas_por_caja ?? productoManual.value?.piezas_por_caja ?? 0;
+});
+function abrirManual() {
+    Object.assign(manual, { abierto: true, codigo: '', productoId: pendientes.value[0]?.producto.id ?? null, origen: 'manual', aviso: '' });
+    manual.piezas = piezasPorCaja.value;
+    setTimeout(() => document.getElementById('codigo-manual')?.focus(), 50);
+}
+function elegirProducto(id: number, origen: 'manual' | 'codigo') {
+    manual.productoId = id;
+    manual.origen = origen;
+    manual.piezas = piezasPorCaja.value;
+    manual.aviso = '';
+}
+function buscarCodigo() {
+    const c = manual.codigo.trim().toUpperCase();
+    if (!c) return;
+    const porCodigo = props.catalogo.find((p) => p.upc === c);
+    const porSku = props.catalogo.find((p) => p.sku === c);
+    const p = porCodigo ?? porSku;
+    if (p) {
+        elegirProducto(p.id, porCodigo ? 'codigo' : 'manual');
+        manual.codigo = '';
+        if (!props.recepcion.lineas.some((l) => l.producto.id === p.id)) manual.aviso = `${p.sku} no viene en esta recepción: quedará como no esperado.`;
+    } else {
+        manual.aviso = `No hay ningún producto con el código ${c}.`;
+    }
+}
+function registrarManual(piezas: number) {
+    if (!manual.productoId || piezas < 1) return;
+    router.post(
+        `/operador/recepciones/${props.recepcion.id}/cajas-manuales`,
+        { producto_id: manual.productoId, piezas, origen: manual.origen },
+        { ...opciones, ...con('manual'), onSuccess: () => { elegidaId.value = null; manual.abierto = false; } },
+    );
+}
+const origenTexto = { rfid: 'RFID', codigo: 'código de barras', manual: 'a mano' } as const;
+
 const estadoSku = (l: Linea) => {
     const d = l.confirmadas - l.esperadas;
     if (l.esperadas === 0) return { texto: 'No esperado', clase: 'text-warn' };
@@ -180,9 +226,86 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
 
         <!-- Leer -->
         <BarridoRfid v-if="lectura.fase.value !== 'inactivo'" :contador="lectura.contador.value" titulo="Leyendo la caja" grande class="mb-4" />
-        <button v-else-if="!cerrada" type="button" class="btn btn-primario btn-grande mb-4 w-full" :disabled="bloqueado" @click="leerCaja">
-            <ScanLine class="size-6" />Leer caja {{ (recepcion.cajas[0]?.numero ?? 0) + 1 }}
-        </button>
+        <div v-else-if="!cerrada && !manual.abierto" class="mb-4 grid gap-3 sm:grid-cols-[1.4fr_1fr]">
+            <button type="button" class="btn btn-primario btn-grande w-full" :disabled="bloqueado" @click="leerCaja">
+                <ScanLine class="size-6" />Leer caja {{ (recepcion.cajas[0]?.numero ?? 0) + 1 }}
+            </button>
+            <button type="button" class="btn btn-secundario btn-grande w-full" :disabled="bloqueado" @click="abrirManual">
+                <Hand class="size-5" />Sin lector RFID
+            </button>
+        </div>
+
+        <!-- Caja sin lector: código de barras o a mano -->
+        <section v-if="manual.abierto && !cerrada" class="panel mb-4">
+            <header class="flex items-center justify-between border-b border-line px-5 py-3">
+                <h2 class="text-lg font-bold">Caja {{ (recepcion.cajas[0]?.numero ?? 0) + 1 }} sin lector RFID</h2>
+                <button type="button" class="flex size-11 items-center justify-center rounded-ui text-ink-2 hover:bg-surface-2" aria-label="Cerrar" @click="manual.abierto = false">
+                    <X class="size-5" />
+                </button>
+            </header>
+            <div class="space-y-4 px-5 py-4">
+                <div>
+                    <label for="codigo-manual" class="etiqueta">Escanea el código de barras o escribe el SKU</label>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <Barcode class="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-ink-3" aria-hidden="true" />
+                            <input
+                                id="codigo-manual"
+                                v-model="manual.codigo"
+                                class="campo h-12 pl-11 font-id text-lg uppercase placeholder:normal-case"
+                                placeholder="7501000000101 o PAN-DEN-3032"
+                                autocomplete="off"
+                                @keydown.enter.prevent="buscarCodigo"
+                            />
+                        </div>
+                        <button type="button" class="btn btn-secundario h-12" @click="buscarCodigo">Buscar</button>
+                    </div>
+                    <p v-if="manual.aviso" class="mt-1.5 text-sm text-warn">{{ manual.aviso }}</p>
+                </div>
+
+                <div v-if="pendientes.length">
+                    <p class="etiqueta">O elige un SKU pendiente</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            v-for="l in pendientes"
+                            :key="l.id"
+                            type="button"
+                            class="flex min-h-12 items-center gap-2 rounded-ui border px-3 font-id text-sm font-semibold"
+                            :class="manual.productoId === l.producto.id ? 'border-primary bg-surface text-ink' : 'border-line bg-surface-2 text-ink-2'"
+                            :aria-pressed="manual.productoId === l.producto.id"
+                            @click="elegirProducto(l.producto.id, 'manual')"
+                        >
+                            {{ l.producto.sku }}
+                            <span class="font-ui text-xs font-normal text-ink-3">faltan {{ l.cajas_esperadas - l.cajas_leidas }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="productoManual" class="rounded-ui border border-line bg-surface-2 p-4">
+                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                        <div>
+                            <IdSegmentado :valor="productoManual.sku" tipo="sku" tam="lg" class="!text-xl" />
+                            <p class="text-ink-2">{{ productoManual.descripcion }}</p>
+                        </div>
+                        <span class="flex items-center gap-1.5 text-sm text-ink-2">
+                            <component :is="manual.origen === 'codigo' ? Barcode : Hand" class="size-4" aria-hidden="true" />{{ origenTexto[manual.origen] }}
+                        </span>
+                    </div>
+                    <button type="button" class="btn btn-primario btn-grande mt-4 w-full" :disabled="bloqueado || !piezasPorCaja" @click="registrarManual(piezasPorCaja)">
+                        <Girando v-if="es('manual')" />Caja completa: {{ piezasPorCaja }} piezas
+                    </button>
+                    <div class="mt-4 flex flex-wrap items-end gap-3">
+                        <div>
+                            <p class="etiqueta">¿No viene completa? Piezas contadas</p>
+                            <Contador v-model="manual.piezas" etiqueta="Piezas contadas" />
+                        </div>
+                        <button type="button" class="btn btn-secundario h-12" :disabled="bloqueado || manual.piezas < 1" @click="registrarManual(manual.piezas)">
+                            Registrar {{ manual.piezas }} piezas
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
 
         <!-- Caja abierta -->
         <article v-if="caja" class="panel mb-4" :class="{ 'opacity-60': caja.estado === 'anulada' }">
@@ -192,7 +315,10 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
                         Caja {{ caja.numero }}
                         <span v-if="caja.estado === 'anulada'" class="ml-2 rounded bg-bad-bg px-2 py-0.5 align-middle text-sm text-bad">Anulada</span>
                     </p>
-                    <p class="text-sm text-ink-2">{{ caja.usuario }} · {{ fechaYHora(caja.hora) }}</p>
+                    <p class="flex items-center gap-1.5 text-sm text-ink-2">
+                        <component :is="caja.origen === 'rfid' ? ScanLine : caja.origen === 'codigo' ? Barcode : Hand" class="size-4" aria-hidden="true" />
+                        {{ origenTexto[caja.origen] }} · {{ caja.usuario }} · {{ fechaYHora(caja.hora) }}
+                    </p>
                 </div>
             </header>
 
@@ -205,14 +331,14 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
                     <div class="text-right">
                         <p class="num font-display text-4xl leading-none font-bold">{{ l.leidas }}</p>
                         <p class="text-sm text-ink-2">
-                            leídas<template v-if="l.esperadas_por_caja"> · caja de {{ l.esperadas_por_caja }}</template>
+                            {{ caja.origen === 'rfid' ? 'leídas' : 'contadas' }}<template v-if="l.esperadas_por_caja"> · caja de {{ l.esperadas_por_caja }}</template>
                         </p>
                         <p v-if="l.esperadas_por_caja && l.leidas !== l.esperadas_por_caja" class="text-sm font-semibold text-bad">{{ conSigno(l.leidas - l.esperadas_por_caja) }} contra la caja</p>
                     </div>
                 </div>
 
                 <div v-if="marcas[l.id] && !cerrada" class="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div>
+                    <div v-if="caja.origen === 'rfid'">
                         <p class="etiqueta">Sin etiqueta (contadas a mano)</p>
                         <Contador v-model="marcas[l.id].sin_etiqueta" etiqueta="Sin etiqueta" :deshabilitado="caja.estado === 'anulada'" />
                     </div>
@@ -231,7 +357,7 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
                 <button v-if="cambiada" type="button" class="btn btn-primario btn-grande flex-1" :disabled="bloqueado" @click="guardar(caja)">
                     <Girando v-if="es('guardar')" />Guardar caja {{ caja.numero }}
                 </button>
-                <button v-if="caja.estado === 'leida'" type="button" class="btn btn-secundario btn-grande flex-1" :disabled="bloqueado" @click="releer(caja)">
+                <button v-if="caja.estado === 'leida' && caja.origen === 'rfid'" type="button" class="btn btn-secundario btn-grande flex-1" :disabled="bloqueado" @click="releer(caja)">
                     <RotateCcw class="size-5" />Volver a leer
                 </button>
                 <button type="button" class="btn btn-secundario btn-grande flex-1" :disabled="bloqueado" @click="anular(caja)">

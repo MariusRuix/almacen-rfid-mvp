@@ -15,8 +15,8 @@ import { estadosDestino, estadosPedido, estadosTarea } from '@/lib/etiquetas';
 import { conSigno, fecha, fechaYHora, n } from '@/lib/formato';
 import type { DestinoPedido, PedidoDetalle } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { Check, Circle, ExternalLink, Play, ScanLine, Truck, Wrench } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { Check, Circle, ExternalLink, Hand, Play, ScanLine, Truck, Wrench } from 'lucide-vue-next';
+import { computed, reactive, ref } from 'vue';
 
 const props = defineProps<{ pedido: PedidoDetalle; regla: string }>();
 const { esResponsable } = useCompartido();
@@ -91,6 +91,19 @@ async function aceptar(d: DestinoPedido) {
         aceptar: 'Aceptar lectura',
     });
     if (ok) router.post(`/pedido-destinos/${d.id}/aceptar`, {}, { ...opciones, ...con(`aceptar-${d.id}`) });
+}
+
+// Revisión del bulto sin lector: se captura lo contado por SKU
+const contandoId = ref<number | null>(null);
+const contado = reactive<Record<number, number | null>>({});
+function abrirConteo(d: DestinoPedido) {
+    contandoId.value = d.id;
+    for (const l of d.lineas) contado[l.id] = null;
+}
+const conteoCompleto = (d: DestinoPedido) => d.lineas.every((l) => typeof contado[l.id] === 'number' && (contado[l.id] as number) >= 0);
+function registrarConteo(d: DestinoPedido) {
+    const lineas = Object.fromEntries(d.lineas.map((l) => [l.id, contado[l.id]]));
+    router.post(`/pedido-destinos/${d.id}/contar`, { lineas }, { ...opciones, ...con(`contar-${d.id}`), onSuccess: () => (contandoId.value = null) });
 }
 
 const salida = useForm({ transportista: 'Transportes del Bajío (ficticio)', placas: '', sello: '' });
@@ -199,7 +212,7 @@ async function despachar() {
 
                 <div class="overflow-x-auto">
                     <table class="tabla">
-                        <thead><tr><th>SKU</th><th class="der">Pedido</th><th class="der">Separado</th><th class="der">Leído RFID</th><th class="der">Dif.</th></tr></thead>
+                        <thead><tr><th>SKU</th><th class="der">Pedido</th><th class="der">Separado</th><th class="der">{{ d.verificacion === 'manual' ? 'Contado' : 'Leído RFID' }}</th><th class="der">Dif.</th></tr></thead>
                         <tbody>
                             <tr v-for="(l, i) in d.lineas" :key="l.id" :class="{ 'bg-bad-bg/50': dif(l) && filaVisible(d, i), 'fila-recien': filaRecien(d, i) }">
                                 <td><IdSegmentado :valor="l.producto.sku" tipo="sku" /></td>
@@ -215,13 +228,42 @@ async function despachar() {
                 <div v-if="enRevision" class="mt-auto space-y-3 border-t border-line px-5 py-4">
                     <BarridoRfid v-if="leyendo(d)" :contador="lectura.contador.value" :esperado="separadas(d)" titulo="Leyendo el bulto" />
                     <Resultado v-else :estado="resultadoDestino(d).estado" :titulo="resultadoDestino(d).titulo">
-                        <template v-if="d.estado === 'verificado'">Verificado {{ fechaYHora(d.verificado_at) }}</template>
-                        <template v-else-if="d.estado === 'con_diferencia'">Lo leído en el bulto no coincide con lo que se separó.</template>
-                        <template v-else>Pasa el lector por el bulto de este destino.</template>
+                        <template v-if="d.estado === 'verificado'">
+                            Verificado {{ d.verificacion === 'manual' ? 'con conteo a mano' : 'con RFID' }}{{ d.verifico ? ` por ${d.verifico}` : '' }} · {{ fechaYHora(d.verificado_at) }}
+                        </template>
+                        <template v-else-if="d.estado === 'con_diferencia'">
+                            Lo {{ d.verificacion === 'manual' ? 'contado' : 'leído' }} en el bulto no coincide con lo que se separó.
+                        </template>
+                        <template v-else>Pasa el lector por el bulto de este destino o cuéntalo a mano.</template>
                     </Resultado>
-                    <div class="flex flex-wrap gap-2">
+                    <form v-if="contandoId === d.id" class="space-y-3 rounded-ui border border-line bg-surface-2 p-4" @submit.prevent="registrarConteo(d)">
+                        <p class="font-semibold">Conteo a mano del bulto</p>
+                        <div v-for="l in d.lineas" :key="l.id" class="flex items-center justify-between gap-3">
+                            <label :for="`contado-${l.id}`" class="min-w-0">
+                                <IdSegmentado :valor="l.producto.sku" tipo="sku" />
+                                <span class="block text-xs text-ink-3">se separaron {{ n(l.separada) }}</span>
+                            </label>
+                            <input :id="`contado-${l.id}`" v-model.number="contado[l.id]" type="number" min="0" inputmode="numeric" class="campo num w-28 text-right" placeholder="Contadas" />
+                        </div>
+                        <div class="flex flex-wrap gap-2 pt-1">
+                            <button type="submit" class="btn btn-primario" :disabled="!conteoCompleto(d) || !!ocupado">
+                                <Girando v-if="es(`contar-${d.id}`)" />Registrar conteo
+                            </button>
+                            <button type="button" class="btn btn-secundario" @click="contandoId = null">Cancelar</button>
+                        </div>
+                    </form>
+                    <div v-else class="flex flex-wrap gap-2">
                         <button v-if="d.estado === 'separado' && !leyendo(d)" type="button" class="btn btn-primario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="leer(d)">
                             <ScanLine class="size-4" />Leer bulto
+                        </button>
+                        <button
+                            v-if="['separado', 'con_diferencia'].includes(d.estado) && !leyendo(d)"
+                            type="button"
+                            class="btn btn-secundario"
+                            :disabled="!!ocupado || lectura.fase.value !== 'inactivo'"
+                            @click="abrirConteo(d)"
+                        >
+                            <Hand class="size-4" />Contar a mano
                         </button>
                         <template v-if="d.estado === 'con_diferencia' && !leyendo(d)">
                             <button type="button" class="btn btn-primario" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="corregir(d)">

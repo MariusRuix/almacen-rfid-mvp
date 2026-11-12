@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Producto;
 use App\Models\Recepcion;
 use App\Models\RecepcionCaja;
 use App\Services\ConteoPorCajas;
@@ -31,6 +32,7 @@ class OperadorRecepcionController extends Controller
                     'id' => $l->id,
                     'producto' => Presentar::producto($l->producto),
                     'cajas_esperadas' => $l->cajas_esperadas,
+                    'piezas_por_caja' => $l->piezas_por_caja,
                     'esperadas' => $l->piezas_esperadas,
                     'leidas' => (int) $l->piezas_leidas,
                     'confirmadas' => (int) $l->piezas_confirmadas,
@@ -41,6 +43,7 @@ class OperadorRecepcionController extends Controller
                     'id' => $c->id,
                     'numero' => $c->numero,
                     'estado' => $c->estado,
+                    'origen' => $c->origen,
                     'usuario' => $c->usuario?->name,
                     'hora' => $c->created_at->toDateTimeString(),
                     'lineas' => $c->lineas->map(fn ($cl) => [
@@ -54,7 +57,27 @@ class OperadorRecepcionController extends Controller
                     ]),
                 ]),
             ],
+            // Para el escáner de código de barras: se busca por código o por SKU.
+            'catalogo' => Producto::orderBy('sku')->get(['id', 'sku', 'upc', 'descripcion', 'piezas_por_caja', 'accesorio']),
         ]);
+    }
+
+    /** Caja contada sin lector RFID: a mano o escaneando códigos de barras. */
+    public function registrarManual(Request $request, Recepcion $recepcion, ConteoPorCajas $conteo)
+    {
+        abort_if($recepcion->estado === 'cerrada', 422);
+        $datos = $request->validate([
+            'producto_id' => ['required', 'integer', 'exists:productos,id'],
+            'piezas' => ['required', 'integer', 'min:1', 'max:10000'],
+            'origen' => ['required', 'in:manual,codigo'],
+        ], [
+            'producto_id.*' => 'Elige o escanea un SKU del catálogo.',
+            'piezas.*' => 'Indica cuántas piezas trae la caja (1 o más).',
+        ]);
+        $caja = $conteo->registrarManual($recepcion, $datos['producto_id'], $datos['piezas'], $datos['origen'], $request->user()->id);
+        $sku = Producto::find($datos['producto_id'])->sku;
+
+        return back()->with('ok', 'Caja '.$caja->numero.' registrada '.($datos['origen'] === 'codigo' ? 'por código de barras' : 'a mano').': '.$datos['piezas'].' × '.$sku.'.');
     }
 
     public function leerCaja(Request $request, Recepcion $recepcion, ConteoPorCajas $conteo)
@@ -71,7 +94,7 @@ class OperadorRecepcionController extends Controller
 
     public function releer(RecepcionCaja $caja, ConteoPorCajas $conteo)
     {
-        abort_if($caja->recepcion->estado === 'cerrada', 422);
+        abort_if($caja->recepcion->estado === 'cerrada' || $caja->origen !== 'rfid', 422);
         $conteo->releerCaja($caja->load('lineas'));
 
         return back()->with('ok', 'Caja '.$caja->numero.' leída de nuevo.');

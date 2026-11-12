@@ -30,6 +30,11 @@ class PedidoDestino extends Model
         return $this->belongsTo(Destino::class);
     }
 
+    public function verifico(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verifico_id');
+    }
+
     public function lineas(): HasMany
     {
         return $this->hasMany(PedidoLinea::class);

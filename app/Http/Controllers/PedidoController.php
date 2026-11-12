@@ -110,7 +110,7 @@ class PedidoController extends Controller
 
     public static function detalle(Pedido $pedido): array
     {
-        $pedido->load(['destinos.destino', 'destinos.lineas.producto', 'tareas.producto', 'tareas.pedimento', 'tareas.ubicacion', 'salida.autorizo']);
+        $pedido->load(['destinos.destino', 'destinos.verifico', 'destinos.lineas.producto', 'tareas.producto', 'tareas.pedimento', 'tareas.ubicacion', 'salida.autorizo']);
 
         return [
             'id' => $pedido->id,
@@ -126,6 +126,8 @@ class PedidoController extends Controller
                 'estado' => $d->estado,
                 'bultos' => $d->bultos,
                 'verificado_at' => $d->verificado_at?->toDateTimeString(),
+                'verificacion' => $d->verificacion,
+                'verifico' => $d->verifico?->name,
                 'actividades' => collect($d->actividades())->map(fn ($etiqueta, $campo) => [
                     'campo' => $campo, 'etiqueta' => $etiqueta, 'hecha' => (bool) $d->{$campo},
                 ])->values(),
@@ -207,7 +209,7 @@ class PedidoController extends Controller
     }
 
     /** Lectura RFID del bulto de un destino durante la revisión. */
-    public function leerDestino(PedidoDestino $destino, LectorRfid $lector)
+    public function leerDestino(Request $request, PedidoDestino $destino, LectorRfid $lector)
     {
         $pedido = $destino->pedido;
         abort_unless(in_array($pedido->estado, ['en_revision', 'listo']), 422);
@@ -216,21 +218,44 @@ class PedidoController extends Controller
         $esperado = $destino->lineas->groupBy('producto_id')->map->sum('cantidad_separada')->all();
         $conteo = Epc::contarPorProducto($lector->leer($esperado, $pedido->folio.':'.$destino->destino->codigo));
 
+        return $this->evaluarBulto($destino, fn ($l) => $conteo[$l->producto_id] ?? 0, 'rfid', $request->user()->id);
+    }
+
+    /** Revisión del bulto sin lector: se captura lo contado por SKU. */
+    public function contarDestino(Request $request, PedidoDestino $destino)
+    {
+        abort_unless(in_array($destino->pedido->estado, ['en_revision', 'listo']), 422);
+        $destino->load(['lineas', 'destino']);
+        $datos = $request->validate([
+            'lineas' => ['required', 'array'],
+            'lineas.*' => ['required', 'integer', 'min:0', 'max:100000'],
+        ], ['lineas.*.*' => 'Captura lo contado de cada SKU (0 o más).']);
+        if ($destino->lineas->contains(fn ($l) => ! array_key_exists($l->id, $datos['lineas']))) {
+            return back()->with('error', 'Captura lo contado de todos los SKU del destino.');
+        }
+
+        return $this->evaluarBulto($destino, fn ($l) => (int) $datos['lineas'][$l->id], 'manual', $request->user()->id);
+    }
+
+    private function evaluarBulto(PedidoDestino $destino, \Closure $contado, string $metodo, int $userId)
+    {
         $cuadra = true;
         foreach ($destino->lineas as $l) {
-            $leida = $conteo[$l->producto_id] ?? 0;
+            $leida = $contado($l);
             $l->update(['cantidad_leida' => $leida]);
             $cuadra = $cuadra && $leida === $l->cantidad_separada;
         }
 
-        $destino->update($cuadra
+        $destino->update(($cuadra
             ? ['estado' => 'verificado', 'verificado_at' => now()]
-            : ['estado' => 'con_diferencia', 'verificado_at' => null]);
-        $this->actualizarEstado($pedido);
+            : ['estado' => 'con_diferencia', 'verificado_at' => null]) + ['verificacion' => $metodo, 'verifico_id' => $userId]);
+        $this->actualizarEstado($destino->pedido);
+
+        $como = $metodo === 'rfid' ? '' : ' (conteo a mano)';
 
         return back()->with($cuadra ? 'ok' : 'error', $cuadra
-            ? $destino->destino->codigo.' cuadra con lo preparado.'
-            : $destino->destino->codigo.' no cuadra: revisa las líneas marcadas.');
+            ? $destino->destino->codigo.' cuadra con lo preparado'.$como.'.'
+            : $destino->destino->codigo.' no cuadra'.$como.': revisa las líneas marcadas.');
     }
 
     /** El operador corrigió físicamente el bulto; la siguiente lectura confirma. */

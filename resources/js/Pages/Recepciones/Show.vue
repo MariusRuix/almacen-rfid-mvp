@@ -29,7 +29,7 @@ const props = defineProps<{
     recepcion: {
         id: number; folio: string; estado: string; origen: string; fecha_esperada: string;
         cerrada_at: string | null; cerro: string | null; pedimento: Pedimento; lineas: Linea[];
-        conteo: null | { cajas: number; anuladas: number; terminado_at: string | null; termino: string | null };
+        conteo: null | { cajas: number; manuales: number; anuladas: number; terminado_at: string | null; termino: string | null };
     };
     ubicaciones: { id: number; codigo: string; zona: string; capacidad: number; ocupadas: number }[];
     zonaRecepcion: string;
@@ -202,6 +202,7 @@ function ubicar(l: Linea) {
         <p v-if="porCajas && !cerrada" class="mb-4 flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
             <ScanLine class="size-4" aria-hidden="true" />
             Se cuenta caja por caja en piso: <b class="text-ink">{{ recepcion.conteo!.cajas }} cajas leídas</b>
+            <template v-if="recepcion.conteo!.manuales"> · {{ recepcion.conteo!.manuales }} sin lector</template>
             <template v-if="recepcion.conteo!.anuladas"> ({{ recepcion.conteo!.anuladas }} anuladas)</template>.
             <template v-if="recepcion.conteo!.terminado_at"> {{ recepcion.conteo!.termino }} terminó el conteo {{ fechaYHora(recepcion.conteo!.terminado_at) }}.</template>
             <template v-else> El conteo sigue en curso.</template>

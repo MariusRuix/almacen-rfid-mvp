@@ -39,6 +39,19 @@ class ConteoPorCajas
         });
     }
 
+    /** Caja contada sin lector RFID: a mano o escaneando el código de barras de cada pieza. */
+    public function registrarManual(Recepcion $recepcion, int $productoId, int $piezas, string $origen, int $userId): RecepcionCaja
+    {
+        return DB::transaction(function () use ($recepcion, $productoId, $piezas, $origen, $userId) {
+            $numero = (int) $recepcion->cajas()->max('numero') + 1;
+            $caja = $recepcion->cajas()->create(['numero' => $numero, 'user_id' => $userId, 'origen' => $origen]);
+            $caja->lineas()->create(['producto_id' => $productoId, 'piezas_leidas' => $piezas]);
+            $this->recalcular($recepcion);
+
+            return $caja;
+        });
+    }
+
     /** Segunda lectura de una caja ya corregida físicamente: sale completa. */
     public function releerCaja(RecepcionCaja $caja): void
     {
@@ -60,14 +73,17 @@ class ConteoPorCajas
     public function recalcular(Recepcion $recepcion): void
     {
         $recepcion->load('lineas');
-        $suma = RecepcionCajaLinea::whereHas('caja', fn ($q) => $q->where('recepcion_id', $recepcion->id)->where('estado', 'leida'))
-            ->selectRaw('producto_id, sum(piezas_leidas) as leidas, sum(sin_etiqueta) as sin_etiqueta, sum(sin_accesorio) as sin_accesorio, sum(danadas) as danadas')
+        // piezas_leidas de una caja = lo contado con el método de esa caja; "leídas RFID" solo suma las cajas RFID.
+        $suma = RecepcionCajaLinea::join('recepcion_cajas', 'recepcion_cajas.id', '=', 'recepcion_caja_lineas.recepcion_caja_id')
+            ->where('recepcion_cajas.recepcion_id', $recepcion->id)->where('recepcion_cajas.estado', 'leida')
+            ->selectRaw("producto_id, sum(case when recepcion_cajas.origen = 'rfid' then piezas_leidas else 0 end) as rfid,
+                sum(piezas_leidas) as leidas, sum(sin_etiqueta) as sin_etiqueta, sum(sin_accesorio) as sin_accesorio, sum(danadas) as danadas")
             ->groupBy('producto_id')->get()->keyBy('producto_id');
 
         foreach ($recepcion->lineas as $linea) {
             $s = $suma[$linea->producto_id] ?? null;
             $linea->update([
-                'piezas_leidas' => (int) ($s->leidas ?? 0),
+                'piezas_leidas' => (int) ($s->rfid ?? 0),
                 'piezas_confirmadas' => (int) ($s->leidas ?? 0) + (int) ($s->sin_etiqueta ?? 0),
                 'piezas_sin_etiqueta' => (int) ($s->sin_etiqueta ?? 0),
                 'piezas_sin_accesorio' => (int) ($s->sin_accesorio ?? 0),
@@ -80,7 +96,7 @@ class ConteoPorCajas
             $recepcion->lineas()->create([
                 'producto_id' => $productoId, 'cajas_esperadas' => 0, 'piezas_esperadas' => 0,
                 'piezas_por_caja' => Producto::find($productoId)->piezas_por_caja,
-                'piezas_leidas' => (int) $s->leidas, 'piezas_confirmadas' => (int) $s->leidas + (int) $s->sin_etiqueta,
+                'piezas_leidas' => (int) $s->rfid, 'piezas_confirmadas' => (int) $s->leidas + (int) $s->sin_etiqueta,
                 'piezas_sin_etiqueta' => (int) $s->sin_etiqueta, 'piezas_sin_accesorio' => (int) $s->sin_accesorio,
                 'piezas_danadas' => (int) $s->danadas,
             ]);

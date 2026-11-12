@@ -62,6 +62,7 @@ class RecepcionController extends Controller
                 'cerro' => $recepcion->cerro?->name,
                 'conteo' => $cajas->isEmpty() ? null : [
                     'cajas' => $cajas->where('estado', 'leida')->count(),
+                    'manuales' => $cajas->where('estado', 'leida')->where('origen', '!=', 'rfid')->count(),
                     'anuladas' => $cajas->where('estado', 'anulada')->count(),
                     'terminado_at' => $recepcion->conteo_terminado_at?->toDateTimeString(),
                     'termino' => $recepcion->terminoConteo?->name,
@@ -232,12 +233,15 @@ class RecepcionController extends Controller
         $zonaRec = Ubicacion::zona('recepcion');
         $zonaInc = Ubicacion::zona('incidencia');
 
-        DB::transaction(function () use ($recepcion, $inventario, $zonaRec, $zonaInc, $request) {
+        $cajas = $recepcion->cajas()->where('estado', 'leida')->get()->countBy('origen');
+        $nota = $cajas->isEmpty() ? 'Conteo: lectura RFID' : 'Conteo: '.$cajas->map(fn ($n, $o) => $n.' '.['rfid' => 'cajas RFID', 'codigo' => 'cajas por código de barras', 'manual' => 'cajas a mano'][$o])->implode(', ');
+
+        DB::transaction(function () use ($recepcion, $inventario, $zonaRec, $zonaInc, $request, $nota) {
             foreach ($recepcion->lineas as $l) {
                 $buenas = $l->piezas_confirmadas - $l->piezas_sin_accesorio - $l->piezas_danadas;
                 if ($buenas > 0) {
                     $inventario->mover('recepcion', $l->producto_id, $recepcion->pedimento_id, null,
-                        ['ubicacion_id' => $zonaRec->id, 'estado' => 'disponible'], $buenas, $recepcion, $recepcion->folio);
+                        ['ubicacion_id' => $zonaRec->id, 'estado' => 'disponible'], $buenas, $recepcion, $recepcion->folio, $nota);
                 }
                 if ($l->piezas_sin_accesorio > 0) {
                     $inventario->mover('recepcion', $l->producto_id, $recepcion->pedimento_id, null,
