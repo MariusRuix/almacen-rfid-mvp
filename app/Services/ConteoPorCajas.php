@@ -102,8 +102,9 @@ class ConteoPorCajas
             ]);
         }
 
-        if ($recepcion->estado === 'esperada') {
-            $recepcion->update(['estado' => 'en_conteo']);
+        // Cualquier cambio en las cajas reabre el conteo (si ya estaba terminado, hay que volver a terminarlo).
+        if (in_array($recepcion->estado, ['esperada', 'contada'], true)) {
+            $recepcion->update(['estado' => 'en_conteo', 'conteo_terminado_at' => null, 'termino_conteo_id' => null]);
         }
     }
 

@@ -202,7 +202,7 @@ class RecepcionController extends Controller
     public function quitarLinea(Request $request, RecepcionLinea $linea)
     {
         $recepcion = $linea->recepcion;
-        $permitido = $recepcion->estado === 'esperada' || ($recepcion->estado === 'en_conteo' && $linea->piezas_esperadas === 0);
+        $permitido = $recepcion->estado === 'esperada' || (in_array($recepcion->estado, ['en_conteo', 'contada'], true) && $linea->piezas_esperadas === 0);
         abort_unless($permitido, 422);
         if ($recepcion->lineas()->count() === 1) {
             return back()->with('error', 'La recepción debe tener al menos un SKU.');

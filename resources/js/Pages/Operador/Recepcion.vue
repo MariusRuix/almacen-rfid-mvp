@@ -222,7 +222,7 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
 
         <Resultado v-if="cerrada" estado="cuadra" titulo="Recepción cerrada" class="mb-4">La responsable ya cerró esta recepción.</Resultado>
         <Resultado v-else-if="recepcion.conteo_terminado_at" estado="parcial" titulo="Conteo terminado" class="mb-4">
-            {{ recepcion.termino }} lo terminó {{ fechaYHora(recepcion.conteo_terminado_at) }}. Todavía puedes corregir cajas hasta que la responsable cierre.
+            {{ recepcion.termino }} lo terminó {{ fechaYHora(recepcion.conteo_terminado_at) }}. Si corriges una caja, el conteo se reabre y hay que volver a terminarlo.
         </Resultado>
 
         <!-- Leer -->
@@ -404,8 +404,8 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
             </div>
         </section>
 
-        <button v-if="!cerrada && cajasLeidas" type="button" class="btn btn-secundario btn-grande w-full" :disabled="bloqueado" @click="terminar">
-            <Girando v-if="es('terminar')" /><CheckCheck v-else class="size-5" />{{ recepcion.conteo_terminado_at ? 'Volver a marcar como terminado' : 'Terminar conteo' }}
+        <button v-if="!cerrada && cajasLeidas && !recepcion.conteo_terminado_at" type="button" class="btn btn-secundario btn-grande w-full" :disabled="bloqueado" @click="terminar">
+            <Girando v-if="es('terminar')" /><CheckCheck v-else class="size-5" />Terminar conteo
         </button>
     </PisoLayout>
 </template>

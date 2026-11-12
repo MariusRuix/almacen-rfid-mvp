@@ -76,7 +76,7 @@ const resultado = computed(() => {
 // Corrección de lo esperado (antes de leer) y SKU no esperados (durante el conteo)
 const editarEsperado = computed(() => props.recepcion.estado === 'esperada' && esResponsable.value);
 const porCajas = computed(() => props.recepcion.conteo !== null);
-const enConteo = computed(() => props.recepcion.estado === 'en_conteo');
+const enConteo = computed(() => ['en_conteo', 'contada'].includes(props.recepcion.estado));
 const cambioEsperado = (l: Linea) => esperado[l.id].cajas !== l.cajas || esperado[l.id].piezas_por_caja !== l.piezas_por_caja;
 function guardarEsperado(l: Linea) {
     router.put(`/recepcion-lineas/${l.id}/esperado`, esperado[l.id], { ...opciones, ...con(`esperado-${l.id}`) });

@@ -17,6 +17,8 @@ class Recepcion extends Model
         return ['fecha_esperada' => 'date', 'cerrada_at' => 'datetime', 'conteo_terminado_at' => 'datetime'];
     }
 
+    // Estados: esperada → en_conteo → contada (el auxiliar terminó; falta que la responsable cierre) → cerrada.
+
     public function pedimento(): BelongsTo
     {
         return $this->belongsTo(Pedimento::class);

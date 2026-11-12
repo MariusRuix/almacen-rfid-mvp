@@ -152,7 +152,7 @@ class OperadorRecepcionController extends Controller
         if (! $recepcion->cajas()->where('estado', 'leida')->exists()) {
             return back()->with('error', 'Lee al menos una caja antes de terminar.');
         }
-        $recepcion->update(['conteo_terminado_at' => now(), 'termino_conteo_id' => $request->user()->id]);
+        $recepcion->update(['estado' => 'contada', 'conteo_terminado_at' => now(), 'termino_conteo_id' => $request->user()->id]);
 
         return redirect('/operador')->with('ok', 'Conteo de '.$recepcion->folio.' terminado. La responsable lo revisa y cierra.');
     }

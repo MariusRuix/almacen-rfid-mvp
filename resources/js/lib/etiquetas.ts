@@ -5,6 +5,7 @@ type Mapa = Record<string, [string, Tono]>;
 export const estadosRecepcion: Mapa = {
     esperada: ['Esperada', 'neutro'],
     en_conteo: ['En conteo', 'info'],
+    contada: ['Contada · por cerrar', 'warn'],
     cerrada: ['Cerrada', 'ok'],
 };
 
