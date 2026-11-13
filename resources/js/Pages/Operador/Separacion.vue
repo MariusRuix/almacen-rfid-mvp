@@ -8,7 +8,7 @@ import { estadosDestino } from '@/lib/etiquetas';
 import { n } from '@/lib/formato';
 import type { DestinoPedido, PedidoDetalle } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Check } from 'lucide-vue-next';
+import { Check, Printer } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 const props = defineProps<{ pedido: PedidoDetalle; tomadoPorProducto: Record<number, number> }>();
@@ -110,11 +110,19 @@ function confirmar(d: DestinoPedido) {
                 <button type="button" class="btn btn-primario btn-grande w-full" :disabled="procesando" @click="confirmar(actual)">
                     <Girando v-if="procesando" />{{ actual.estado === 'pendiente' ? `${actual.codigo} listo` : `Actualizar ${actual.codigo}` }}
                 </button>
+                <a
+                    v-if="actual.estado !== 'pendiente' && actual.bultos"
+                    :href="`/etiquetas/pedidos/${pedido.id}?destino=${actual.id}`"
+                    target="_blank"
+                    class="btn btn-secundario btn-grande mt-3 w-full"
+                    ><Printer class="size-5" />Imprimir {{ actual.bultos }} {{ actual.bultos === 1 ? 'etiqueta' : 'etiquetas' }} de bulto</a
+                >
             </div>
         </article>
 
         <div v-else class="space-y-5">
             <Resultado estado="cuadra" titulo="Todos los destinos separados" grande>Sigue la revisión con el lector RFID por destino.</Resultado>
+            <a :href="`/etiquetas/pedidos/${pedido.id}`" target="_blank" class="btn btn-secundario btn-grande w-full"><Printer class="size-5" />Imprimir etiquetas de todos los bultos</a>
             <Link :href="`/pedidos/${pedido.id}`" class="btn btn-primario btn-grande w-full">Ir a la revisión</Link>
         </div>
     </PisoLayout>

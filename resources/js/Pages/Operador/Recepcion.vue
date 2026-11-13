@@ -13,7 +13,7 @@ import { conSigno, fechaYHora, n } from '@/lib/formato';
 import type { Pedimento, Producto } from '@/types';
 import { router } from '@inertiajs/vue3';
 import { Head } from '@inertiajs/vue3';
-import { Ban, Barcode, CheckCheck, Hand, RotateCcw, ScanLine, Undo2, X } from 'lucide-vue-next';
+import { Ban, Barcode, CheckCheck, Hand, Printer, RotateCcw, ScanLine, Undo2, X } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 interface CajaLinea {
@@ -321,6 +321,14 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
                         {{ origenTexto[caja.origen] }} · {{ caja.usuario }} · {{ fechaYHora(caja.hora) }}
                     </p>
                 </div>
+                <a
+                    v-if="caja.estado === 'leida'"
+                    :href="`/etiquetas/recepciones/${recepcion.id}?caja=${caja.id}`"
+                    target="_blank"
+                    class="btn btn-secundario h-12 flex-none"
+                    title="Etiqueta para pegar en la caja"
+                    ><Printer class="size-5" />Etiqueta</a
+                >
             </header>
 
             <div v-for="(l, i) in caja.lineas" :key="l.id" class="border-b border-line px-5 py-4 last:border-b-0" :class="{ 'fila-recien': lectura.recien(i) }">
@@ -384,7 +392,10 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
 
         <!-- Cajas leídas -->
         <section v-if="recepcion.cajas.length" class="panel mb-4 px-5 py-4">
-            <h2 class="mb-3 text-lg font-bold">Cajas</h2>
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 class="text-lg font-bold">Cajas</h2>
+                <a :href="`/etiquetas/recepciones/${recepcion.id}`" target="_blank" class="btn btn-secundario"><Printer class="size-4" />Imprimir etiquetas</a>
+            </div>
             <div class="flex flex-wrap gap-2">
                 <button
                     v-for="c in recepcion.cajas"

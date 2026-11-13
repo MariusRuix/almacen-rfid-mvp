@@ -4,6 +4,7 @@ use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DemoController;
 use App\Http\Controllers\DestinoController;
+use App\Http\Controllers\EtiquetaController;
 use App\Http\Controllers\IncidenciaController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\MovimientoController;
@@ -29,6 +30,11 @@ Route::middleware('auth')->group(function () {
     // Diagramas del proceso para la presentación
     Route::inertia('/proceso', 'Proceso');
     Route::view('/proceso/diagramas', 'proceso');
+
+    // Etiquetas para imprimir: caja, bulto y rótulo de ubicación
+    Route::get('/etiquetas/recepciones/{recepcion}', [EtiquetaController::class, 'cajas']);
+    Route::get('/etiquetas/pedidos/{pedido}', [EtiquetaController::class, 'bultos']);
+    Route::get('/etiquetas/ubicaciones', [EtiquetaController::class, 'ubicaciones']);
 
     // Recepción
     Route::get('/recepciones', [RecepcionController::class, 'index']);

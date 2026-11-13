@@ -16,7 +16,7 @@ import { estadosRecepcion } from '@/lib/etiquetas';
 import { conSigno, fecha, fechaYHora, n } from '@/lib/formato';
 import type { Pedimento, Producto, UbicacionCorta } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Lock, PackagePlus, RotateCcw, ScanLine, Trash2 } from 'lucide-vue-next';
+import { Lock, PackagePlus, Printer, RotateCcw, ScanLine, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 interface Linea {
@@ -173,6 +173,7 @@ function ubicar(l: Linea) {
                     <div><dt class="text-ink-3">Estado</dt><dd class="mt-0.5"><Chip :valor="recepcion.estado" :mapa="estadosRecepcion" /></dd></div>
                 </dl>
             </template>
+            <a v-if="porCajas" :href="`/etiquetas/recepciones/${recepcion.id}`" target="_blank" class="btn btn-secundario"><Printer class="size-4" />Etiquetas de caja</a>
             <template v-if="!cerrada">
                 <template v-if="porCajas" />
                 <button v-else-if="leida" type="button" class="btn btn-secundario" title="Simula que se corrigió el conteo físico y se vuelve a pasar el lector" :disabled="!!ocupado || lectura.fase.value !== 'inactivo'" @click="releer">

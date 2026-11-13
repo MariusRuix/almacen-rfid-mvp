@@ -12,7 +12,7 @@ import { estadosExistencia, tiposMovimiento, zonas } from '@/lib/etiquetas';
 import { fecha, fechaYHora, n } from '@/lib/formato';
 import type { FilaMovimiento } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ArrowRightLeft, FolderPlus, LayoutGrid, MapPinPlus, Pencil, Power, Search, Trash2, X } from 'lucide-vue-next';
+import { ArrowRightLeft, FolderPlus, LayoutGrid, MapPinPlus, Pencil, Power, Printer, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 
 interface Contenido {
@@ -449,7 +449,12 @@ function crearUbicacion() {
             <section v-for="p in pasillosDe(area.id)" :key="p.pasillo" class="panel p-5">
                 <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                     <h2 class="text-lg font-bold">Pasillo {{ p.pasillo }} <span class="text-sm font-normal text-ink-3">· {{ p.tipo }}, vista de frente</span></h2>
-                    <p class="num text-sm text-ink-2">{{ n(p.piezas) }} de {{ n(p.capacidad) }} piezas</p>
+                    <p class="num flex items-center gap-3 text-sm text-ink-2">
+                        {{ n(p.piezas) }} de {{ n(p.capacidad) }} piezas
+                        <a :href="`/etiquetas/ubicaciones?area=${p.areaId}&pasillo=${p.pasillo}&formato=carta`" target="_blank" class="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                            ><Printer class="size-3.5" aria-hidden="true" />Rótulos</a
+                        >
+                    </p>
                 </div>
                 <div class="-m-1 overflow-x-auto p-1">
                     <div class="grid min-w-[22rem] gap-2" :style="{ gridTemplateColumns: `3.25rem repeat(${p.modulos.length}, minmax(4.25rem, 1fr))` }">
@@ -521,7 +526,10 @@ function crearUbicacion() {
                                     {{ zonas[elegida.zona] ?? elegida.zona }} · {{ nombreArea(elegida.area_id) }}<template v-if="!elegida.disponible"> · no recibe mercancía</template>
                                 </p>
                             </div>
-                            <button type="button" class="flex size-10 items-center justify-center rounded-ui text-ink-2 hover:bg-surface-2" aria-label="Cerrar" @click="elegidaId = null"><X class="size-5" /></button>
+                            <div class="flex items-center gap-1">
+                                <a :href="`/etiquetas/ubicaciones?codigo=${encodeURIComponent(elegida.codigo)}`" target="_blank" class="btn btn-secundario min-h-10 px-3 text-sm" title="Rótulo para pegar en la ubicación"><Printer class="size-4" />Rótulo</a>
+                                <button type="button" class="flex size-10 items-center justify-center rounded-ui text-ink-2 hover:bg-surface-2" aria-label="Cerrar" @click="elegidaId = null"><X class="size-5" /></button>
+                            </div>
                         </header>
 
                         <div class="flex-1 space-y-6 overflow-y-auto px-5 py-5">

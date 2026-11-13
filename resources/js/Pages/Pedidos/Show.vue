@@ -18,7 +18,7 @@ import { estadosDestino, estadosPedido, estadosTarea } from '@/lib/etiquetas';
 import { conSigno, fecha, fechaYHora, n } from '@/lib/formato';
 import type { DestinoPedido, PedidoDetalle } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { Check, Circle, ExternalLink, Hand, Play, ScanLine, Truck, Wrench, X } from 'lucide-vue-next';
+import { Check, Circle, ExternalLink, Hand, Play, Printer, ScanLine, Truck, Wrench, X } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
 
 const props = defineProps<{ pedido: PedidoDetalle; regla: string }>();
@@ -153,6 +153,7 @@ async function despachar() {
                     {{ pedido.propietario }} · {{ pedido.destinos.length }} destinos · <b class="num text-ink">{{ n(totalPiezas) }}</b> piezas · compromiso {{ fecha(pedido.fecha_compromiso) }}
                 </p>
             </template>
+            <a v-if="pedido.destinos.some((d) => d.bultos)" :href="`/etiquetas/pedidos/${pedido.id}`" target="_blank" class="btn btn-secundario"><Printer class="size-4" />Etiquetas de bulto</a>
             <Chip :valor="pedido.estado" :mapa="estadosPedido" />
             <button v-if="pedido.estado === 'nuevo' && esResponsable" type="button" class="btn btn-primario" :disabled="!!ocupado" @click="liberar">
                 <Girando v-if="es('liberar')" /><Play v-else class="size-4" />{{ es('liberar') ? 'Generando instrucciones…' : 'Liberar a surtido' }}
@@ -203,7 +204,10 @@ async function despachar() {
                 <header class="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
                     <div>
                         <p class="flex items-center gap-2"><span class="font-id font-semibold">{{ d.codigo }}</span><Chip :valor="d.estado" :mapa="estadosDestino" /></p>
-                        <p class="text-sm text-ink-2">{{ d.nombre }}<template v-if="d.bultos"> · {{ d.bultos }} {{ d.bultos === 1 ? 'bulto' : 'bultos' }}</template></p>
+                        <p class="text-sm text-ink-2">{{ d.nombre }}<template v-if="d.bultos">
+                                · {{ d.bultos }} {{ d.bultos === 1 ? 'bulto' : 'bultos' }} ·
+                                <a :href="`/etiquetas/pedidos/${pedido.id}?destino=${d.id}`" target="_blank" class="inline-flex items-center gap-1 font-semibold text-primary hover:underline"><Printer class="size-3.5" aria-hidden="true" />etiquetas</a>
+                            </template></p>
                         <ol class="mt-2 flex items-center gap-1.5 text-xs" :aria-label="`Avance de ${d.codigo}`">
                             <template v-for="(m, k) in miniPasos(d)" :key="m.nombre">
                                 <li class="flex items-center gap-1" :class="m.hecho ? 'font-semibold text-ok' : m.mal ? 'font-semibold text-bad' : 'text-ink-3'">
