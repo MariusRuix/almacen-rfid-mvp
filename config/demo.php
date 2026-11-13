@@ -12,6 +12,6 @@ return [
         'PED-0001:T-022' => ['CAM-OXF-M' => -1],
     ],
 
-    // Regla de surtido de la demo. Es una pregunta abierta para el cliente.
-    'regla_surtido' => 'Primero el pedimento con fecha de pago más antigua (PEPS); dentro del pedimento, la ubicación con menos piezas.',
+    // Criterio provisional para proponer de qué pedimento surtir. No viene del cliente: su regla es una pregunta abierta.
+    'regla_surtido' => 'Provisional, solo para la demo: se propone primero el pedimento pagado antes y, dentro de él, la ubicación con menos piezas. La regla real está por confirmar con el cliente.',
 ];

@@ -39,7 +39,7 @@ Usa el botón **Reiniciar demo** en la barra lateral (como responsable) o ejecut
 2. **Recepción REC-0001.** Pulsa *Leer RFID*: el pantalón **PAN-DEN-3032** sale con −6. Captura 4 bolsas **sin correa**, porque el RFID no detecta accesorios. Elige entre *Volver a leer* (ya se corrigió el conteo) o cerrar con la diferencia. Al cerrar, las diferencias quedan como incidencias y la mercancía entra a `REC-01`. Después ubica cada línea en un rack (el sistema sugiere uno).
    *En piso:* con el usuario operador, **Vista del operador › REC-0001** cuenta **caja por caja** (23 cajas). La última caja del pantalón trae 6 piezas de menos. En cada caja se marcan las piezas sin etiqueta, sin accesorio o dañadas, y al final se pulsa *Terminar conteo*. La responsable cierra desde su panel. Las migraciones nuevas se aplican con `php artisan migrate` o con **Reiniciar demo**.
 3. **Inventario y mapa.** Filtra por pedimento o ubicación y abre el desglose de un SKU.
-4. **Pedido PED-0001.** Pulsa *Liberar a surtido*. Las instrucciones de toma aplican la regla PEPS por pedimento; con **CAM-OXF-M** salen dos pedimentos distintos.
+4. **Pedido PED-0001.** Pulsa *Liberar a surtido*. El sistema propone de qué pedimento y ubicación tomar; con **CAM-OXF-M** salen dos pedimentos distintos. El criterio es provisional: de qué pedimento surten es una pregunta para el cliente.
 5. **Vista del operador** (en tablet o en otra pestaña con el usuario operador): una instrucción a la vez. Ahí se puede probar "No están completas". Después se separa por destino con las actividades de etiquetado y sensor.
 6. **Revisión.** Lee el bulto de **T-014**: sobra 1 camisa. En **T-022** falta 1, porque la pieza quedó en el bulto equivocado. Ahí puedes *Corregí el bulto, volver a leer* o *Aceptar lectura*, que lo registra como incidencia.
 7. **Salida.** Captura transportista, placas y sello. El inventario se descuenta y la salida aparece en el **Historial**.
@@ -55,4 +55,4 @@ En la barra lateral se cambia entre **Contenedor** (identificadores marcados com
 - `app/Services/Inventario.php` es el único punto que cambia existencias. Cada cambio crea un `Movimiento` que no se puede editar ni borrar.
 - Una existencia es la combinación de **SKU + pedimento + ubicación + estado** (`disponible`, `en_preparacion`, `incidencia`).
 - RFID: la interfaz `app/Services/Rfid/LectorRfid.php` tiene la implementación `LectorSimulado`. Los escenarios de diferencia están en `config/demo.php`. Para conectar un lector real se implementa `LectorRfid` y se cambia el binding en `AppServiceProvider`.
-- La regla de surtido (PEPS por fecha de pago del pedimento) está en `PedidoController::liberar`.
+- El criterio provisional para proponer pedimento al liberar está en `PedidoController::liberar` y se describe en `config/demo.php` (`regla_surtido`). No es una regla del cliente.

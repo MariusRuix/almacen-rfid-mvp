@@ -166,7 +166,7 @@ async function despachar() {
             <AvancePedido :avance="avance" />
             <p v-if="pedido.estado === 'nuevo'" class="mt-4 rounded-ui bg-surface-2 px-4 py-3 text-sm text-ink-2">
                 <b class="text-ink">El pedido está registrado, pero todavía no llega a piso.</b>
-                {{ esResponsable ? 'Al liberarlo' : 'Cuando la responsable lo libere' }}, el sistema asigna de qué ubicación y pedimento sale cada pieza y genera las
+                {{ esResponsable ? 'Al liberarlo' : 'Cuando la responsable lo libere' }}, el sistema propone de qué ubicación y pedimento sale cada pieza y genera las
                 instrucciones de toma para el operador. Mientras tanto se puede revisar sin que nadie haya tomado nada.
             </p>
         </section>
@@ -193,7 +193,7 @@ async function despachar() {
                     </tbody>
                 </table>
             </div>
-            <p class="border-t border-line px-5 py-3 text-sm text-ink-2"><b class="text-ink">Regla de la demo:</b> {{ regla }}</p>
+            <p class="border-t border-line px-5 py-3 text-sm text-ink-2"><b class="text-ink">Cómo se eligió el pedimento:</b> {{ regla }}</p>
         </section>
 
         <!-- Destinos -->
