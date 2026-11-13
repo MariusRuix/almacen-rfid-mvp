@@ -18,6 +18,7 @@ import {
     ScanLine,
     Tag,
     TriangleAlert,
+    Workflow,
     X,
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
@@ -63,6 +64,10 @@ const secciones = computed<{ nombre: string; items: ItemNav[] }[]>(() => [
     {
         nombre: 'Piso',
         items: [{ href: '/operador', etiqueta: 'Vista del operador', icono: ScanLine }],
+    },
+    {
+        nombre: 'Presentación',
+        items: [{ href: '/proceso', etiqueta: 'Proceso de la operación', icono: Workflow }],
     },
 ]);
 

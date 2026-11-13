@@ -26,6 +26,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/', TableroController::class);
 
+    // Diagramas del proceso para la presentación
+    Route::inertia('/proceso', 'Proceso');
+    Route::view('/proceso/diagramas', 'proceso');
+
     // Recepción
     Route::get('/recepciones', [RecepcionController::class, 'index']);
     Route::get('/recepciones/plantilla', [RecepcionController::class, 'plantilla']);

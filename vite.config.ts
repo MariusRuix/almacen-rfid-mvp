@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
     plugins: [
-        laravel({ input: ['resources/js/app.ts'], refresh: true }),
+        laravel({ input: ['resources/js/app.ts', 'resources/css/proceso.css'], refresh: true }),
         vue({ template: { transformAssetUrls: { base: null, includeAbsolute: false } } }),
         tailwindcss(),
     ],
