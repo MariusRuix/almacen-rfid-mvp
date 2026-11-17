@@ -15,35 +15,15 @@ class EvidenciaController extends Controller
             'tipo' => ['required', Rule::in(array_keys(Evidencia::TIPOS))],
             'id' => ['required', 'integer'],
             'momento' => ['required', 'string'],
-            'archivos' => ['required', 'array', 'min:1', 'max:8'],
-            'archivos.*' => ['file', 'mimes:jpg,jpeg,png,webp,heic,heif,pdf', 'max:12288'],
             'nota' => ['nullable', 'string', 'max:200'],
-        ], [
-            'archivos.required' => 'Elige al menos una foto o documento.',
-            'archivos.max' => 'Sube hasta 8 archivos a la vez.',
-            'archivos.*.mimes' => 'Solo se aceptan fotos (JPG, PNG, WEBP, HEIC) o PDF.',
-            'archivos.*.max' => 'Cada archivo puede pesar hasta 12 MB.',
-            'archivos.*.uploaded' => 'El archivo no se pudo subir; revisa que no pase del límite del servidor.',
-        ]);
+            ...Evidencia::reglas(),
+        ], Evidencia::MENSAJES);
 
         [$modelo, $momentos] = Evidencia::TIPOS[$datos['tipo']];
         abort_unless(in_array($datos['momento'], $momentos, true), 422);
         $modelo::findOrFail($datos['id']);
 
-        foreach ($request->file('archivos') as $archivo) {
-            Evidencia::create([
-                'tipo' => $datos['tipo'],
-                'referencia_id' => $datos['id'],
-                'momento' => $datos['momento'],
-                'archivo' => $archivo->store("evidencias/{$datos['tipo']}/{$datos['id']}", 'local'),
-                'nombre' => $archivo->getClientOriginalName(),
-                'mime' => $archivo->getMimeType() ?? 'application/octet-stream',
-                'tamano' => $archivo->getSize(),
-                'nota' => $datos['nota'] ?? null,
-                'user_id' => $request->user()->id,
-            ]);
-        }
-        $n = count($request->file('archivos'));
+        $n = Evidencia::guardar($datos['tipo'], (int) $datos['id'], $datos['momento'], $request->file('archivos'), $request->user()->id, $datos['nota'] ?? null);
 
         return back()->with('ok', $n === 1 ? 'Evidencia guardada.' : "{$n} evidencias guardadas.");
     }

@@ -51,7 +51,8 @@ class IncidenciaController extends Controller
         $datos = $request->validate([
             'resolucion' => ['required', 'string', 'max:250'],
             'liberar_a' => ['nullable', 'exists:ubicaciones,id'],
-        ], [], ['resolucion' => 'resolución']);
+            ...Evidencia::reglas(false),
+        ], Evidencia::MENSAJES, ['resolucion' => 'resolución']);
 
         DB::transaction(function () use ($incidencia, $datos, $inventario, $request) {
             // Accesorio completado: las piezas vuelven a estar disponibles.
@@ -71,6 +72,9 @@ class IncidenciaController extends Controller
                 'resolvio_id' => $request->user()->id, 'resuelta_at' => now()]);
         });
 
-        return back()->with('ok', $incidencia->folio.' resuelta.');
+        // Las fotos que se eligieron en el formulario de resolución se guardan junto con la resolución.
+        $fotos = Evidencia::guardar('incidencia', $incidencia->id, 'incidencia', $request->file('archivos') ?? [], $request->user()->id, 'Al resolver');
+
+        return back()->with('ok', $incidencia->folio.' resuelta'.($fotos ? " con {$fotos} ".($fotos === 1 ? 'foto' : 'fotos') : '').'.');
     }
 }

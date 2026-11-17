@@ -3,6 +3,7 @@ import Girando from '@/Components/Girando.vue';
 import { useCompartido } from '@/composables/useCompartido';
 import { confirmar } from '@/composables/useConfirmar';
 import { fechaYHora } from '@/lib/formato';
+import { reducirImagen } from '@/lib/imagenes';
 import type { Evidencia } from '@/types';
 import { router } from '@inertiajs/vue3';
 import { Camera, FileText, TriangleAlert, X } from 'lucide-vue-next';
@@ -40,29 +41,12 @@ const error = computed(() => {
 });
 const subidoAqui = ref(false);
 
-async function reducir(f: File): Promise<File> {
-    if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return f;
-    try {
-        const img = await createImageBitmap(f);
-        const escala = Math.min(1, 1600 / Math.max(img.width, img.height));
-        if (escala === 1 && f.size < 1_500_000) return f;
-        const lienzo = document.createElement('canvas');
-        lienzo.width = Math.round(img.width * escala);
-        lienzo.height = Math.round(img.height * escala);
-        lienzo.getContext('2d')!.drawImage(img, 0, 0, lienzo.width, lienzo.height);
-        const blob = await new Promise<Blob | null>((r) => lienzo.toBlob(r, 'image/jpeg', 0.82));
-        return blob ? new File([blob], f.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : f;
-    } catch {
-        return f;
-    }
-}
-
 async function alElegir(ev: Event) {
     const archivos = Array.from((ev.target as HTMLInputElement).files ?? []);
     if (!archivos.length) return;
     subiendo.value = true;
     subidoAqui.value = true;
-    const listos = await Promise.all(archivos.slice(0, 8).map(reducir));
+    const listos = await Promise.all(archivos.slice(0, 8).map((f) => reducirImagen(f)));
     router.post(
         '/evidencias',
         { tipo: props.tipo, id: props.id, momento: props.momento, archivos: listos },

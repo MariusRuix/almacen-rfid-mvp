@@ -25,6 +25,47 @@ class Evidencia extends Model
         'pedido' => [Pedido::class, ['carga', 'acuse']],
     ];
 
+    /**
+     * Guarda los archivos subidos como evidencias de un registro. Devuelve cuántos guardó.
+     *
+     * @param  \Illuminate\Http\UploadedFile[]  $archivos
+     */
+    public static function guardar(string $tipo, int $id, string $momento, array $archivos, ?int $userId, ?string $nota = null): int
+    {
+        foreach ($archivos as $archivo) {
+            static::create([
+                'tipo' => $tipo,
+                'referencia_id' => $id,
+                'momento' => $momento,
+                'archivo' => $archivo->store("evidencias/{$tipo}/{$id}", 'local'),
+                'nombre' => $archivo->getClientOriginalName(),
+                'mime' => $archivo->getMimeType() ?? 'application/octet-stream',
+                'tamano' => $archivo->getSize(),
+                'nota' => $nota,
+                'user_id' => $userId,
+            ]);
+        }
+
+        return count($archivos);
+    }
+
+    /** Reglas de validación compartidas para los archivos. */
+    public static function reglas(bool $requeridos = true): array
+    {
+        return [
+            'archivos' => [$requeridos ? 'required' : 'nullable', 'array', 'max:8'],
+            'archivos.*' => ['file', 'mimes:jpg,jpeg,png,webp,heic,heif,pdf', 'max:12288'],
+        ];
+    }
+
+    public const MENSAJES = [
+        'archivos.required' => 'Elige al menos una foto o documento.',
+        'archivos.max' => 'Sube hasta 8 archivos a la vez.',
+        'archivos.*.mimes' => 'Solo se aceptan fotos (JPG, PNG, WEBP, HEIC) o PDF.',
+        'archivos.*.max' => 'Cada archivo puede pesar hasta 12 MB.',
+        'archivos.*.uploaded' => 'El archivo no se pudo subir; revisa que no pase del límite del servidor.',
+    ];
+
     public function usuario(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
