@@ -65,6 +65,8 @@ export interface FilaMovimiento {
     folio: string | null;
     usuario: string | null;
     nota: string | null;
+    /** Fotos del documento del movimiento (solo en el historial). */
+    fotos?: number | null;
 }
 
 export interface LineaPedido {

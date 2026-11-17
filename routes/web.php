@@ -62,6 +62,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventario', [InventarioController::class, 'index']);
     Route::get('/inventario/mapa', [InventarioController::class, 'mapa']);
     Route::get('/movimientos', [MovimientoController::class, 'index']);
+    Route::get('/movimientos/{movimiento}/evidencias', [MovimientoController::class, 'evidencias']);
     Route::post('/areas', [AreaController::class, 'store'])->middleware('rol:responsable');
     Route::put('/areas/{area}', [AreaController::class, 'update'])->middleware('rol:responsable');
     Route::delete('/areas/{area}', [AreaController::class, 'destroy'])->middleware('rol:responsable');
