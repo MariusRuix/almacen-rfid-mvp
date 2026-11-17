@@ -435,10 +435,10 @@ const pasos = [
   ['oper', 3, 'Toma las piezas', 'Va a cada ubicación y confirma lo tomado.', 'Operador › Surtido', 'Si no encuentra lo que dice el sistema, lo marca como faltante y se abre incidencia.'],
   ['sis', 3, 'Pasa a preparación', 'Las piezas quedan en PREP-01, En preparación.', 'Inventario', 'Siguen siendo inventario, pero ya no están disponibles para otro pedido.'],
   ['oper', 3, 'Separa por destino', 'Arma y etiqueta el bulto de cada tienda: comercial, sensor y etiqueta de bulto.', 'Operador › Separación', 'Cada destino tiene sus actividades: etiqueta comercial, sensor de seguridad, lo que pida la cadena. Al confirmarlo se imprime una etiqueta por bulto: tienda, pedido, bulto 1 de N y contenido.'],
-  ['lector', 4, 'Lee cada bulto', 'Con lector, o conteo a mano si no hay.', 'Pedidos › PED-0001', 'Sustituye la revisión que hoy se hace con video.'],
+  ['lector', 4, 'Lee cada bulto', 'Con lector, o conteo a mano si no hay.', 'Pedidos › PED-0001', 'Junto con la foto del bulto, cubre buena parte de la revisión que hoy se hace con video.'],
   ['sis', 4, 'Cuadra contra lo pedido', 'Barra de cuadre por destino. Una diferencia detiene la salida.', 'Pedidos › PED-0001', 'Muestra exactamente qué SKU sobra o falta y en qué bulto.'],
   ['resp', 4, 'Resuelve y verifica', 'Acepta la lectura, corrige el bulto o abre incidencia.', 'Pedidos › PED-0001', 'Cuando todos los destinos están verificados, el pedido pasa a Listo para salir.'],
-  ['resp', 4, 'Autoriza la salida', 'Captura transportista, placas y sello.', 'Pedidos › PED-0001', 'Las condiciones de salida quedan ligadas al folio.'],
+  ['resp', 4, 'Autoriza la salida', 'Captura transportista, placas y sello, con fotos de la carga.', 'Pedidos › PED-0001', 'Las condiciones de salida quedan ligadas al folio.'],
   ['sis', 4, 'Descuenta y registra', 'Sale del inventario con folio de salida y queda en el historial.', 'Movimientos', 'Cierra el ciclo: de cualquier pieza se puede saber de qué pedimento vino y a qué tienda fue.'],
 ];
 const lienzo = $('#lienzo');
@@ -692,14 +692,14 @@ verEvento(4);
 /* ───────── 4 · Plano ───────── */
 const lector = (x, y) => `<g class="lector-ico" transform="translate(${x} ${y})"><circle class="base" cx="0" cy="0" r="4"/><path d="M7 -7a10 10 0 0 1 0 14M12 -12a17 17 0 0 1 0 24"/></g>`;
 const zonasPlano = {
-  descarga: { n: 'Andén de descarga', t: 'Operativa', que: 'Llega el contenedor con su pedimento. Se descargan las cajas tal como vienen del origen, con RFID de fábrica.', quien: 'Personal de recepción', pant: '—', lectura: 'No. Todavía no se cuenta.' },
+  descarga: { n: 'Andén de descarga', t: 'Operativa', que: 'Llega el contenedor con su pedimento. Antes de abrir se fotografían el sello y el contenedor; luego se descargan las cajas tal como vienen del origen, con RFID de fábrica.', quien: 'Personal de recepción', pant: '—', lectura: 'No. Todavía no se cuenta.' },
   recepcion: { n: 'Recepción · REC-01', t: 'Operativa', que: 'Se cuenta caja por caja contra lo esperado y a cada caja se le pega su etiqueta. Al cerrar, lo bueno entra al inventario aquí mismo.', quien: 'Auxiliar con tablet; cierra la responsable', pant: 'Operador › Recepción · Recepciones › REC-0001', lectura: 'Sí. Lector RFID por caja; sin lector, código de barras o a mano.' },
   incidencia: { n: 'Incidencias · INC-01', t: 'Operativa', que: 'Piezas dañadas, sin accesorio o con alguna diferencia. Quedan apartadas y no se pueden surtir hasta que se liberan.', quien: 'Responsable', pant: 'Incidencias', lectura: 'No.' },
   principal: { n: 'Bodega principal · racks A y B', t: 'Almacenaje', que: 'Posiciones pasillo-módulo-nivel: A-01-1 a B-04-3, 24 posiciones. Cada una guarda SKU + pedimento y lleva su rótulo con código de barras.', quien: 'Operador acomoda y toma; la responsable decide dónde', pant: 'Inventario › Mapa · Operador › Surtido', lectura: 'No hace falta: la instrucción dice ubicación y pedimento.' },
   temporada: { n: 'Área Temporada · AD-01, AD-02', t: 'Almacenaje', que: 'Posiciones adicionales para los picos de enero, mayo y agosto. AD-02 está inactiva: no se ofrece al ubicar.', quien: 'Responsable las activa o desactiva', pant: 'Inventario › Mapa', lectura: 'No.' },
   oficina: { n: 'Oficina de la responsable', t: 'Control', que: 'Carga lo esperado, cierra recepciones, decide ubicaciones, registra y libera pedidos, resuelve diferencias y autoriza salidas.', quien: 'Responsable (Laura Méndez en la demo)', pant: 'Tablero · Recepciones · Pedidos', lectura: 'No.' },
   preparacion: { n: 'Preparación · PREP-01', t: 'Operativa', que: 'Mesas por destino: T-014, T-022, T-031 y comercio electrónico. Se separa, se etiqueta (comercial, sensor y etiqueta de bulto) y se revisa cada bulto antes de salir.', quien: 'Operador separa; la responsable verifica', pant: 'Operador › Separación · Pedidos › PED-0001', lectura: 'Sí. Estación de revisión: lectura del bulto o conteo a mano.' },
-  salida: { n: 'Andén de salida', t: 'Operativa', que: 'Los bultos verificados se cargan. Se registran transportista, placas y sello y se descuenta el inventario.', quien: 'Responsable autoriza', pant: 'Pedidos › PED-0001 · Movimientos', lectura: 'No. Lo que sale ya se leyó en revisión.' },
+  salida: { n: 'Andén de salida', t: 'Operativa', que: 'Los bultos verificados se cargan. Se registran transportista, placas y sello, con fotos de la carga, y se descuenta el inventario. Después se sube el acuse de la tienda.', quien: 'Responsable autoriza', pant: 'Pedidos › PED-0001 · Movimientos', lectura: 'No. Lo que sale ya se leyó en revisión.' },
 };
 function armarPlano() {
   let h = `<defs><marker id="pl-pt" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--marca)"/></marker>
