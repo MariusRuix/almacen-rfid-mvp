@@ -26,6 +26,7 @@ const condiciones = computed<Condicion[]>(() => {
         .filter((v) => v.faltan.length);
     const t = props.transporte;
     const transporteOk = !!(t.transportista.trim() && t.placas.trim() && t.sello.trim());
+    const fotosCarga = props.pedido.evidencias.filter((e) => e.momento === 'carga').length;
 
     return [
         {
@@ -54,6 +55,13 @@ const condiciones = computed<Condicion[]>(() => {
                 : 'Sin incidencias abiertas del pedido',
             detalle: props.pedido.incidencias_abiertas ? 'No impiden la salida; se pueden atender después.' : undefined,
             accion: props.pedido.incidencias_abiertas ? { texto: 'Ver', href: '/incidencias' } : undefined,
+            bloquea: false,
+        },
+        {
+            clave: 'evidencia',
+            estado: fotosCarga ? 'ok' : 'aviso',
+            texto: fotosCarga ? `Fotos de la carga y el sello (${fotosCarga})` : 'Sin fotos de la carga y el sello',
+            detalle: fotosCarga ? undefined : 'No impide la salida, pero es la evidencia que se pide ante una reclamación.',
             bloquea: false,
         },
         {

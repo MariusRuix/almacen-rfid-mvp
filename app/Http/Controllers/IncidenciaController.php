@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Evidencia;
 use App\Models\Existencia;
 use App\Models\Incidencia;
 use App\Models\Ubicacion;
@@ -15,6 +16,8 @@ class IncidenciaController extends Controller
 {
     public function index(): Response
     {
+        $fotos = Evidencia::de('incidencia', Incidencia::pluck('id'));
+
         return Inertia::render('Incidencias/Index', [
             'incidencias' => Incidencia::with(['producto', 'pedimento', 'destino', 'reporto', 'resolvio'])
                 ->orderByRaw("case when estado = 'abierta' then 0 else 1 end")->latest('id')->get()
@@ -36,6 +39,7 @@ class IncidenciaController extends Controller
                     'resolvio' => $i->resolvio?->name,
                     'fecha' => $i->created_at->toDateTimeString(),
                     'puede_liberar' => $i->tipo === 'accesorio_faltante' && $i->estado === 'abierta',
+                    'evidencias' => Evidencia::paraVista($fotos->get($i->id)),
                 ]),
             'ubicaciones' => Ubicacion::whereIn('zona', Ubicacion::ALMACENAJE)->orderBy('codigo')->get(['id', 'codigo']),
         ]);

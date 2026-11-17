@@ -14,7 +14,8 @@ import { useOcupado } from '@/composables/useOcupado';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { estadosRecepcion } from '@/lib/etiquetas';
 import { conSigno, fecha, fechaYHora, n } from '@/lib/formato';
-import type { Pedimento, Producto, UbicacionCorta } from '@/types';
+import Evidencias from '@/Components/Evidencias.vue';
+import type { Evidencia, Pedimento, Producto, UbicacionCorta } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Lock, PackagePlus, Printer, RotateCcw, ScanLine, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
@@ -31,6 +32,8 @@ const props = defineProps<{
         id: number; folio: string; estado: string; origen: string; fecha_esperada: string;
         cerrada_at: string | null; cerro: string | null; pedimento: Pedimento; lineas: Linea[];
         conteo: null | { cajas: number; manuales: number; anuladas: number; terminado_at: string | null; termino: string | null };
+        evidencias: Evidencia[];
+        fotos_cajas: number;
     };
     ubicaciones: { id: number; codigo: string; zona: string; capacidad: number; ocupadas: number }[];
     zonaRecepcion: string;
@@ -200,6 +203,21 @@ function ubicar(l: Linea) {
                 <template v-if="editarEsperado"> Antes de leer todavía puedes corregir lo esperado.</template>
             </template>
         </Resultado>
+
+        <section class="panel mb-5 px-5 py-4">
+            <Evidencias
+                tipo="recepcion"
+                :id="recepcion.id"
+                momento="llegada"
+                titulo="Llegada del contenedor"
+                ayuda="Foto del sello y del contenedor antes de abrir; pedimento o lista de empaque en PDF."
+                :evidencias="recepcion.evidencias"
+            />
+            <p v-if="recepcion.fotos_cajas" class="mt-2 text-sm text-ink-2">
+                Además hay {{ recepcion.fotos_cajas }} {{ recepcion.fotos_cajas === 1 ? 'foto' : 'fotos' }} de cajas tomadas en piso.
+                <Link :href="`/operador/recepciones/${recepcion.id}`" class="font-semibold text-primary hover:underline">Ver cajas</Link>
+            </p>
+        </section>
 
         <p v-if="porCajas && !cerrada" class="mb-4 flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
             <ScanLine class="size-4" aria-hidden="true" />

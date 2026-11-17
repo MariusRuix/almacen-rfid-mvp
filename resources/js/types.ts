@@ -30,6 +30,18 @@ export interface Usuario {
     rol: 'responsable' | 'operador';
 }
 
+export interface Evidencia {
+    id: number;
+    url: string;
+    nombre: string;
+    es_imagen: boolean;
+    momento: string;
+    nota: string | null;
+    usuario: string | null;
+    usuario_id: number | null;
+    fecha: string;
+}
+
 export interface PropsCompartidas {
     app: { nombre: string };
     auth: { user: Usuario | null };
@@ -75,6 +87,7 @@ export interface DestinoPedido {
     verifico: string | null;
     actividades: { campo: string; etiqueta: string; hecha: boolean }[];
     lineas: LineaPedido[];
+    evidencias: Evidencia[];
 }
 
 export interface Tarea {
@@ -96,6 +109,7 @@ export interface PedidoDetalle {
     fecha_compromiso: string;
     creado: string;
     incidencias_abiertas: number;
+    evidencias: Evidencia[];
     destinos: DestinoPedido[];
     tareas: Tarea[];
     salida: null | {

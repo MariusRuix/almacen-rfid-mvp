@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Destino;
+use App\Models\Evidencia;
 use App\Models\Existencia;
 use App\Models\Incidencia;
 use App\Models\Pedido;
@@ -123,6 +124,7 @@ class PedidoController extends Controller
     public static function detalle(Pedido $pedido): array
     {
         $pedido->load(['destinos.destino', 'destinos.verifico', 'destinos.lineas.producto', 'tareas.producto', 'tareas.pedimento', 'tareas.ubicacion', 'salida.autorizo']);
+        $fotosBultos = Evidencia::de('destino', $pedido->destinos->pluck('id'));
 
         return [
             'id' => $pedido->id,
@@ -132,6 +134,7 @@ class PedidoController extends Controller
             'fecha_compromiso' => $pedido->fecha_compromiso->toDateString(),
             'creado' => $pedido->created_at->toDateTimeString(),
             'incidencias_abiertas' => Incidencia::where('origen_type', 'pedido')->where('origen_id', $pedido->id)->where('estado', 'abierta')->count(),
+            'evidencias' => Evidencia::paraVista(Evidencia::de('pedido', [$pedido->id])->get($pedido->id)),
             'destinos' => $pedido->destinos->map(fn (PedidoDestino $d) => [
                 'id' => $d->id,
                 'codigo' => $d->destino->codigo,
@@ -142,6 +145,7 @@ class PedidoController extends Controller
                 'verificado_at' => $d->verificado_at?->toDateTimeString(),
                 'verificacion' => $d->verificacion,
                 'verifico' => $d->verifico?->name,
+                'evidencias' => Evidencia::paraVista($fotosBultos->get($d->id)),
                 'actividades' => collect($d->actividades())->map(fn ($etiqueta, $campo) => [
                     'campo' => $campo, 'etiqueta' => $etiqueta, 'hecha' => (bool) $d->{$campo},
                 ])->values(),

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Evidencia;
 use App\Models\Producto;
 use App\Models\Recepcion;
 use App\Models\RecepcionCaja;
@@ -17,6 +18,7 @@ class OperadorRecepcionController extends Controller
     public function show(Recepcion $recepcion): Response
     {
         $recepcion->load(['pedimento', 'lineas.producto', 'cajas.lineas.producto', 'cajas.usuario', 'terminoConteo']);
+        $fotosCajas = Evidencia::de('caja', $recepcion->cajas->pluck('id'));
 
         return Inertia::render('Operador/Recepcion', [
             'recepcion' => [
@@ -26,6 +28,7 @@ class OperadorRecepcionController extends Controller
                 'pedimento' => Presentar::pedimento($recepcion->pedimento),
                 'conteo_terminado_at' => $recepcion->conteo_terminado_at?->toDateTimeString(),
                 'termino' => $recepcion->terminoConteo?->name,
+                'evidencias' => Evidencia::paraVista(Evidencia::de('recepcion', [$recepcion->id])->get($recepcion->id)),
                 'cajas_esperadas' => (int) $recepcion->lineas->sum('cajas_esperadas'),
                 'piezas_esperadas' => (int) $recepcion->lineas->sum('piezas_esperadas'),
                 'lineas' => $recepcion->lineas->map(fn ($l) => [
@@ -46,6 +49,7 @@ class OperadorRecepcionController extends Controller
                     'origen' => $c->origen,
                     'usuario' => $c->usuario?->name,
                     'hora' => $c->created_at->toDateTimeString(),
+                    'evidencias' => Evidencia::paraVista($fotosCajas->get($c->id)),
                     'lineas' => $c->lineas->map(fn ($cl) => [
                         'id' => $cl->id,
                         'producto' => Presentar::producto($cl->producto),

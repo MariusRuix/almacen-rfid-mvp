@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Evidencia;
 use App\Models\Existencia;
 use App\Models\Incidencia;
 use App\Models\Pedimento;
@@ -60,6 +61,8 @@ class RecepcionController extends Controller
                 'fecha_esperada' => $recepcion->fecha_esperada->toDateString(),
                 'cerrada_at' => $recepcion->cerrada_at?->toDateTimeString(),
                 'cerro' => $recepcion->cerro?->name,
+                'evidencias' => Evidencia::paraVista(Evidencia::de('recepcion', [$recepcion->id])->get($recepcion->id)),
+                'fotos_cajas' => Evidencia::where('tipo', 'caja')->whereIn('referencia_id', $cajas->pluck('id'))->count(),
                 'conteo' => $cajas->isEmpty() ? null : [
                     'cajas' => $cajas->where('estado', 'leida')->count(),
                     'manuales' => $cajas->where('estado', 'leida')->where('origen', '!=', 'rfid')->count(),

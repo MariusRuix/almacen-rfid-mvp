@@ -9,7 +9,8 @@ import { useCompartido } from '@/composables/useCompartido';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { estadosIncidencia, tiposIncidencia } from '@/lib/etiquetas';
 import { fechaYHora } from '@/lib/formato';
-import type { Producto } from '@/types';
+import Evidencias from '@/Components/Evidencias.vue';
+import type { Evidencia, Producto } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -17,6 +18,7 @@ interface Inc {
     id: number; folio: string; tipo: string; estado: string; cantidad: number; descripcion: string | null; resolucion: string | null;
     origen_folio: string | null; origen_type: string | null; origen_id: number | null; producto: Producto; pedimento: string | null;
     destino: string | null; reporto: string | null; resolvio: string | null; fecha: string; puede_liberar: boolean;
+    evidencias: Evidencia[];
 }
 defineProps<{ incidencias: Inc[]; ubicaciones: { id: number; codigo: string }[] }>();
 
@@ -62,6 +64,16 @@ const origenHref = (i: Inc) => (i.origen_type === 'recepcion' ? `/recepciones/${
                                 <Link v-if="origenHref(i)" :href="origenHref(i)!" class="font-id font-semibold text-primary hover:underline">{{ i.origen_folio }}</Link>
                             </p>
                             <p v-if="i.resolucion" class="mt-2 text-sm"><b>Resolución:</b> {{ i.resolucion }} <span class="text-ink-3">({{ i.resolvio }})</span></p>
+                            <Evidencias
+                                tipo="incidencia"
+                                :id="i.id"
+                                momento="incidencia"
+                                titulo="Evidencia"
+                                ayuda="Foto de la pieza, la caja o la diferencia."
+                                :sugerida="i.estado === 'abierta' ? 'Sin foto todavía: ante una reclamación es lo primero que se pide.' : null"
+                                :evidencias="i.evidencias"
+                                class="mt-3"
+                            />
                         </div>
                         <button v-if="i.estado === 'abierta' && esResponsable" type="button" class="btn btn-secundario" @click="abrir(i)">
                             {{ abierta === i.id ? 'Cancelar' : 'Resolver' }}

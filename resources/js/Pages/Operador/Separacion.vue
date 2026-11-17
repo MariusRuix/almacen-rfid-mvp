@@ -8,6 +8,7 @@ import { estadosDestino } from '@/lib/etiquetas';
 import { n } from '@/lib/formato';
 import type { DestinoPedido, PedidoDetalle } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
+import Evidencias from '@/Components/Evidencias.vue';
 import { Check, Printer } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
@@ -117,6 +118,17 @@ function confirmar(d: DestinoPedido) {
                     class="btn btn-secundario btn-grande mt-3 w-full"
                     ><Printer class="size-5" />Imprimir {{ actual.bultos }} {{ actual.bultos === 1 ? 'etiqueta' : 'etiquetas' }} de bulto</a
                 >
+                <Evidencias
+                    v-if="actual.estado !== 'pendiente'"
+                    tipo="destino"
+                    :id="actual.id"
+                    momento="bulto"
+                    titulo="Foto del bulto"
+                    ayuda="El bulto armado con sus etiquetas."
+                    :evidencias="actual.evidencias"
+                    grande
+                    class="mt-4"
+                />
             </div>
         </article>
 

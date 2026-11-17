@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DemoController;
 use App\Http\Controllers\DestinoController;
 use App\Http\Controllers\EtiquetaController;
+use App\Http\Controllers\EvidenciaController;
 use App\Http\Controllers\IncidenciaController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\MovimientoController;
@@ -35,6 +36,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/etiquetas/recepciones/{recepcion}', [EtiquetaController::class, 'cajas']);
     Route::get('/etiquetas/pedidos/{pedido}', [EtiquetaController::class, 'bultos']);
     Route::get('/etiquetas/ubicaciones', [EtiquetaController::class, 'ubicaciones']);
+
+    // Evidencias: fotos y documentos ligados a un paso
+    Route::post('/evidencias', [EvidenciaController::class, 'store']);
+    Route::get('/evidencias/{evidencia}', [EvidenciaController::class, 'show']);
+    Route::delete('/evidencias/{evidencia}', [EvidenciaController::class, 'destroy']);
 
     // Recepción
     Route::get('/recepciones', [RecepcionController::class, 'index']);

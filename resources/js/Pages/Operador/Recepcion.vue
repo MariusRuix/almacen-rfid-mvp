@@ -10,7 +10,8 @@ import { useLectura } from '@/composables/useLectura';
 import { useOcupado } from '@/composables/useOcupado';
 import PisoLayout from '@/Layouts/PisoLayout.vue';
 import { conSigno, fechaYHora, n } from '@/lib/formato';
-import type { Pedimento, Producto } from '@/types';
+import Evidencias from '@/Components/Evidencias.vue';
+import type { Evidencia, Pedimento, Producto } from '@/types';
 import { router } from '@inertiajs/vue3';
 import { Head } from '@inertiajs/vue3';
 import { Ban, Barcode, CheckCheck, Hand, Printer, RotateCcw, ScanLine, Undo2, X } from 'lucide-vue-next';
@@ -33,6 +34,7 @@ interface Caja {
     usuario: string | null;
     hora: string;
     lineas: CajaLinea[];
+    evidencias: Evidencia[];
 }
 interface Linea {
     id: number;
@@ -57,6 +59,7 @@ const props = defineProps<{
         piezas_esperadas: number;
         lineas: Linea[];
         cajas: Caja[];
+        evidencias: Evidencia[];
     };
     catalogo: { id: number; sku: string; upc: string | null; descripcion: string; piezas_por_caja: number; accesorio: string | null }[];
 }>();
@@ -220,6 +223,18 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
             </div>
         </section>
 
+        <section class="panel mb-4 px-5 py-4">
+            <Evidencias
+                tipo="recepcion"
+                :id="recepcion.id"
+                momento="llegada"
+                titulo="Llegada del contenedor"
+                ayuda="Antes de abrir: foto del sello y del contenedor."
+                :evidencias="recepcion.evidencias"
+                grande
+            />
+        </section>
+
         <Resultado v-if="cerrada" estado="cuadra" titulo="Recepción cerrada" class="mb-4">La responsable ya cerró esta recepción.</Resultado>
         <Resultado v-else-if="recepcion.conteo_terminado_at" estado="parcial" titulo="Conteo terminado" class="mb-4">
             {{ recepcion.termino }} lo terminó {{ fechaYHora(recepcion.conteo_terminado_at) }}. Si corriges una caja, el conteo se reabre y hay que volver a terminarlo.
@@ -360,6 +375,19 @@ const bloqueado = computed(() => !!ocupado.value || lectura.fase.value !== 'inac
                         <Contador v-model="marcas[l.id].danadas" etiqueta="Dañadas" :deshabilitado="caja.estado === 'anulada'" />
                     </div>
                 </div>
+            </div>
+
+            <div v-if="caja.estado === 'leida'" class="border-t border-line px-5 py-4">
+                <Evidencias
+                    tipo="caja"
+                    :id="caja.id"
+                    momento="caja"
+                    titulo="Fotos de la caja"
+                    ayuda="Si llegó golpeada, abierta o mojada, tómale una foto."
+                    :evidencias="caja.evidencias"
+                    :puede-subir="!cerrada"
+                    grande
+                />
             </div>
 
             <footer v-if="!cerrada" class="flex flex-wrap gap-2 border-t border-line px-5 py-4">

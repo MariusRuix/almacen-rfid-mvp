@@ -4,6 +4,7 @@ import BarridoRfid from '@/Components/BarridoRfid.vue';
 import AvancePedido, { type DatosAvance } from '@/Components/AvancePedido.vue';
 import Chip from '@/Components/Chip.vue';
 import CondicionesSalida from '@/Components/CondicionesSalida.vue';
+import Evidencias from '@/Components/Evidencias.vue';
 import Girando from '@/Components/Girando.vue';
 import Encabezado from '@/Components/Encabezado.vue';
 import IdSegmentado from '@/Components/IdSegmentado.vue';
@@ -255,6 +256,18 @@ async function despachar() {
                     </table>
                 </div>
 
+                <div v-if="d.estado !== 'pendiente'" class="border-t border-line px-5 py-3">
+                    <Evidencias
+                        tipo="destino"
+                        :id="d.id"
+                        momento="bulto"
+                        titulo="Foto del bulto"
+                        ayuda="El bulto armado con sus etiquetas."
+                        :sugerida="d.estado === 'con_diferencia' ? 'Recomendada antes de aceptar una lectura con diferencia.' : null"
+                        :evidencias="d.evidencias"
+                    />
+                </div>
+
                 <div v-if="enRevision" class="mt-auto space-y-3 border-t border-line px-5 py-4">
                     <BarridoRfid v-if="leyendo(d)" :contador="lectura.contador.value" :esperado="separadas(d)" titulo="Leyendo el bulto" />
                     <Resultado v-else :estado="resultadoDestino(d).estado" :titulo="resultadoDestino(d).titulo">
@@ -349,6 +362,25 @@ async function despachar() {
                 </button>
             </form>
             <p v-else-if="!pedido.salida" class="px-5 py-5 text-ink-2">La responsable operativa autoriza la salida.</p>
+            <div class="grid gap-5 border-t border-line px-5 py-4 md:grid-cols-2">
+                <Evidencias
+                    tipo="pedido"
+                    :id="pedido.id"
+                    momento="carga"
+                    titulo="Carga y sello"
+                    ayuda="Foto del sello puesto, de las placas y de la carga en el camión."
+                    :evidencias="pedido.evidencias"
+                />
+                <Evidencias
+                    v-if="pedido.salida"
+                    tipo="pedido"
+                    :id="pedido.id"
+                    momento="acuse"
+                    titulo="Acuse de la tienda"
+                    ayuda="El acuse firmado, cuando regrese."
+                    :evidencias="pedido.evidencias"
+                />
+            </div>
         </section>
 
         <div class="mt-5 grid gap-3 lg:grid-cols-2">
